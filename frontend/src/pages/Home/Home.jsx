@@ -5,7 +5,7 @@ import '../../index.css'
 import '../Login/Login.css'
 import './Home.css'
 import Chat from '../Chat/Chat'
-import { apiFetch, getAuthToken } from '../../api'
+import { apiFetch, getAuthToken, getUploadUrl } from '../../api'
 import { performLogout } from '../Logout/logout' 
 
 function Home(){
@@ -189,7 +189,7 @@ function Home(){
           <div className="left-col" style={{ width: isMobile ? '100%' : 360, borderRight: !isMobile ? '1px solid #e6e6e6' : undefined, background: '#fff', display: 'flex', flexDirection: 'column' }}>
           <div className="d-flex align-items-center justify-content-between p-3">
             <div className="d-flex align-items-center">
-              <img src={'/uploads/'+user.p_p} className="rounded-circle" style={{ width:46, height:46 }} alt="me" />
+              <img src={getUploadUrl(user.p_p)} className="rounded-circle" style={{ width:46, height:46 }} alt="me" />
               <div className="ms-2">
                 <div className="fw-bold">{user.name}</div>
                 <div className="text-muted" style={{ fontSize:12 }}>Online</div>
@@ -208,7 +208,7 @@ function Home(){
           <div className="list-group list-group-flush overflow-auto" style={{ flex: 1 }}>
             {filtered.map(conv=> (
               <button key={conv.user_id} onClick={()=>openConversation(conv)} className={`list-group-item list-group-item-action d-flex align-items-center ${active?.user_id===conv.user_id ? 'active' : ''}`}>
-                <img src={'/uploads/'+conv.p_p} className="rounded-circle" style={{ width:46, height:46 }} alt="pp" />
+                <img src={getUploadUrl(conv.p_p)} className="rounded-circle" style={{ width:46, height:46 }} alt="pp" />
                 <div className="ms-2 flex-grow-1 text-start">
                   <div className="d-flex justify-content-between">
                     <strong>{conv.name}</strong>

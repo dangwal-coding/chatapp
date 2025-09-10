@@ -15,12 +15,10 @@ const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/appchat';
 if (!process.env.MONGO_URI) {
   console.warn('Warning: MONGO_URI not set in environment; falling back to', MONGO_URI);
-  console.warn('For production, create a .env file from .env.example and set MONGO_URI.');
 }
 
 if (!process.env.JWT_SECRET) {
   console.warn('Warning: JWT_SECRET is not set. Using an insecure development fallback JWT secret.');
-  console.warn("Create a .env file and set JWT_SECRET for production (do not use the fallback secret).")
 }
 
 app.use(cors({ origin: true, credentials: true }));
@@ -28,17 +26,19 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// serve uploads folder at /uploads so frontend can load images at /uploads/<filename>
+const path = require('path');
+const uploadsStatic = path.join(__dirname, '..', 'frontend', 'src', 'assets', 'Uploads');
+app.use('/uploads', express.static(uploadsStatic));
+
 app.use('/auth', authRoutes);
 app.use('/ajax', ajaxRoutes);
 
 // lightweight logout endpoints used by frontend during sign-out
 app.post('/auth/logout', async (req, res) => {
   try {
-    // optionally clear any auth cookies set by your app
     try { res.clearCookie('token'); } catch {}
     try { res.clearCookie('connect.sid'); } catch {}
-
-    // If you have server-side session invalidation, do it here.
     return res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

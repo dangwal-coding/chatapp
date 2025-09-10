@@ -1,0 +1,51 @@
+.DS_Store
+.env
+.env.*.local
+.env.local
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# Build output
+dist/
+build/
+frontend/dist/
+frontend/build/
+backend/dist/
+
+# Uploads / user content
+frontend/src/assets/Uploads/
+uploads/
+backend/uploads/
+
+# Coverage
+coverage/
+*.lcov
+
+# Editor directories and IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+Thumbs.db
+Icon?
+
+# Package lock files (optional)
+package-lock.json
+yarn.lock
+
+# Temporary
+*.tgz
+*.pid
+*.seed

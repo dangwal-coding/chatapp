@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const User = require('../models/User');
 
 // configure multer to store uploads in frontend assets Uploads folder
-const uploadsDir = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'assets', 'Uploads');
+const uploadsDir = path.join(__dirname, '..', '..', 'frontend', 'src', 'assets', 'Uploads');
 try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) { /* ignore */ }
 const storage = multer.diskStorage({
   destination: function (req, file, cb) { cb(null, uploadsDir); },
@@ -31,11 +31,14 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const userDoc = { username, name, passwordHash: hash, email };
     if (req.file && req.file.filename) {
-      userDoc.profilePic = '/src/assets/Uploads/' + req.file.filename;
+      userDoc.profilePic = '/uploads/' + req.file.filename;
+      userDoc.p_p = req.file.filename;
     }
     const user = await User.create(userDoc);
     const token = jwt.sign({ id: user._id }, JWT_SECRET);
-    res.json({ token, user: { id: user._id, username: user.username, profilePic: user.profilePic } });
+    const userResp = { id: user._id, username: user.username };
+    if (user.profilePic) { userResp.profilePic = user.profilePic; userResp.p_p = user.p_p || user.profilePic.split('/').pop(); }
+    res.json({ token, user: userResp });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -49,17 +52,17 @@ router.post('/login', async (req, res) => {
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, user.passwordHash || '');
     if (!ok) return res.status(400).json({ error: 'Invalid credentials' });
-  const token = jwt.sign({ id: user._id }, JWT_SECRET);
+    const token = jwt.sign({ id: user._id }, JWT_SECRET);
 
-    // mark user online immediately on successful login
-    try {
-      await User.findByIdAndUpdate(user._id, { status: 'online', lastSeen: new Date() });
-    } catch (err) {
-      console.error('[login] failed to set user online:', err);
+    try { await User.findByIdAndUpdate(user._id, { status: 'online', lastSeen: new Date() }); } catch (err) { console.error('[login] failed to set user online:', err); }
+
+    const userResponse = { id: user._id, username: user.username };
+    if (user.profilePic) {
+      if (user.profilePic.startsWith('/src/assets/Uploads/')) { userResponse.profilePic = user.profilePic.replace('/src/assets/Uploads/', '/uploads/'); }
+      else { userResponse.profilePic = user.profilePic; }
+      userResponse.p_p = user.p_p || (user.profilePic.split('/').pop());
     }
-
-    // return token / response to client
-    return res.json({ ok: true, token, user: { id: user._id, username: user.username } });
+    return res.json({ ok: true, token, user: userResponse });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -70,18 +73,16 @@ const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) return res.status(401).json({ error: 'Missing token' });
   const token = authHeader.split(' ')[1];
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    req.userId = payload.id;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
+  try { const payload = jwt.verify(token, JWT_SECRET); req.userId = payload.id; next(); } catch (err) { return res.status(401).json({ error: 'Invalid token' }); }
 };
 
 router.get('/me', authMiddleware, async (req, res) => {
   const user = await User.findById(req.userId).select('-passwordHash');
-  res.json({ user });
+  if (!user) return res.status(404).json({ error: 'Not found' });
+  const userObj = user.toObject();
+  if (userObj.profilePic && userObj.profilePic.startsWith('/src/assets/Uploads/')) { userObj.profilePic = userObj.profilePic.replace('/src/assets/Uploads/', '/uploads/'); }
+  if (userObj.profilePic && !userObj.p_p) { userObj.p_p = userObj.profilePic.split('/').pop(); }
+  res.json({ user: userObj });
 });
 
 module.exports = router;

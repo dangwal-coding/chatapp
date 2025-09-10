@@ -6,6 +6,7 @@ const UserSchema = new mongoose.Schema({
   email: { type: String },
   passwordHash: { type: String },
   profilePic: { type: String },
+  p_p: { type: String },
   lastSeen: { type: Date, default: Date.now },
   status: { type: String, default: 'offline' }
 }, { timestamps: true });

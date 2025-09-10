@@ -34,3 +34,12 @@ export async function apiFetch(path, opts = {}) {
   if (ct.includes('application/json')) return res.json();
   return res.text();
 }
+
+// return absolute URL to an uploaded file on the backend
+export function getUploadUrl(filename) {
+  if (!filename) return '/logo.png';
+  const backendOrigin = 'http://localhost:4000';
+  if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
+  if (filename.startsWith('/uploads/')) return backendOrigin + filename;
+  return backendOrigin + '/uploads/' + filename;
+}

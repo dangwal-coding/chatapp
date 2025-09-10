@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import * as CryptoJS from 'crypto-js'
 import './chat.css'
-import { apiFetch, getUserIdFromToken } from '../../api'
+import { apiFetch, getUserIdFromToken, getUploadUrl } from '../../api'
 
 // Simple chat panel converted from PHP -> JSX
 // Props:
@@ -224,7 +224,7 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                         <i className="fa-solid fa-arrow-left"></i>
                     </button>
                 )}
-                <img src={'/uploads/' + active.p_p} className="rounded-circle" style={{ width: 46, height: 46 }} alt="sel" />
+                <img src={getUploadUrl(active.p_p)} className="rounded-circle" style={{ width: 46, height: 46 }} alt="sel" />
                 <div className="ms-2">
                     <div className="fw-bold">{active.name}</div>
                     <div className={active.status === 'online' ? 'text-success' : 'text-muted'} style={{ fontSize: 12 }}>

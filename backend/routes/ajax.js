@@ -12,12 +12,7 @@ router.use(express.urlencoded({ extended: true }));
 const maybeAuth = (req) => {
   const h = req.headers.authorization;
   if (!h) return null;
-  try {
-    const payload = jwt.verify(h.split(' ')[1], JWT_SECRET);
-    return payload.id;
-  } catch (err) {
-    return null;
-  }
+  try { const payload = jwt.verify(h.split(' ')[1], JWT_SECRET); return payload.id; } catch (err) { return null; }
 };
 
 // insert -> create message
@@ -28,9 +23,7 @@ router.post('/insert', async (req, res) => {
     if (!fromId || !to || !message) return res.status(400).json({ error: 'Missing fields' });
     const msg = await Message.create({ from: fromId, to, content: message });
     res.json({ ok: true, message: msg });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // getMessage -> get conversation between two users (accept GET and POST for compatibility)
@@ -40,15 +33,10 @@ async function handleGetMessages(req, res) {
     const { from, to } = params;
     if (!from || !to) return res.status(400).json({ error: 'Missing params' });
     const messages = await Message.find({
-      $or: [
-        { from, to },
-        { from: to, to: from }
-      ]
+      $or: [ { from, to }, { from: to, to: from } ]
     }).sort('createdAt');
     res.json({ ok: true, messages });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 }
 
 router.get('/getMessage', handleGetMessages);
@@ -60,9 +48,7 @@ router.get('/search', async (req, res) => {
     const q = req.query.query || req.query.q || '';
     const users = await User.find({ username: new RegExp(q, 'i') }).limit(20).select('-passwordHash');
     res.json({ ok: true, users });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // update_last_seen
@@ -72,30 +58,17 @@ router.post('/update_last_seen', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'Missing user' });
     await User.findByIdAndUpdate(userId, { lastSeen: new Date(), status: 'online' });
     res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // set_offline -> mark user offline (used on logout)
 async function setOfflineHandler(req, res) {
   try {
-    console.log('[set_offline] method:', req.method, 'headers:', req.headers);
-    console.log('[set_offline] body:', req.body, 'query:', req.query);
-
     const userId = maybeAuth(req) || req.body.userId || req.body.user_id || req.query.userId || req.query.user_id;
-    if (!userId) {
-      console.warn('[set_offline] missing userId');
-      return res.status(400).json({ error: 'Missing user' });
-    }
-
+    if (!userId) return res.status(400).json({ error: 'Missing user' });
     await User.findByIdAndUpdate(userId, { lastSeen: new Date(), status: 'offline' });
-    console.log('[set_offline] updated user:', userId);
     res.json({ ok: true });
-  } catch (err) {
-    console.error('[set_offline] error:', err);
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 }
 
 router.post('/set_offline', setOfflineHandler);
@@ -108,9 +81,7 @@ router.get('/user_status', async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
     const user = await User.findById(userId).select('status lastSeen');
     res.json({ ok: true, user });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // conversations -> list conversations for a user (last message, user info)
@@ -118,13 +89,7 @@ router.get('/conversations', async (req, res) => {
   try {
     const userId = maybeAuth(req) || req.query.userId;
     if (!userId) return res.status(400).json({ error: 'Missing user' });
-
-    // find messages where user is either sender or recipient, most recent first
-    const msgs = await Message.find({
-      $or: [ { from: userId }, { to: userId } ]
-    }).sort({ createdAt: -1 }).populate('from to', 'username p_p status lastSeen');
-
-    // build unique conversation list keyed by the other user's id
+    const msgs = await Message.find({ $or: [ { from: userId }, { to: userId } ] }).sort({ createdAt: -1 }).populate('from to', 'username p_p status lastSeen');
     const map = new Map();
     for (const m of msgs) {
       const other = String(m.from._id) === String(userId) ? m.to : m.from;
@@ -142,11 +107,8 @@ router.get('/conversations', async (req, res) => {
         })
       }
     }
-
     res.json({ ok: true, conversations: Array.from(map.values()) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

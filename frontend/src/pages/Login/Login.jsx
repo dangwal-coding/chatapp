@@ -26,7 +26,8 @@ function Login() {
     setLoading(true)
   ;(async () => {
       try {
-    const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
+  // Prefer an injected runtime base or Vite env, otherwise use the production Vercel API
+  const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
     const data = await apiFetch(BASE + '/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

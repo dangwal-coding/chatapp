@@ -1,3 +1,21 @@
+# Enforce LF line endings for text files to avoid CRLF warnings on Windows
+*.html text eol=lf
+*.htm  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.css  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
 # Enforce LF for JSON and package lockfiles to avoid CRLF warnings on Windows
 *.json text eol=lf
 package-lock.json text eol=lf

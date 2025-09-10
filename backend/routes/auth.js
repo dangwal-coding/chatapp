@@ -57,26 +57,27 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
 
 // login
 router.post('/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username });
-    if (!user) return res.status(400).json({ error: 'Invalid credentials' });
-    const ok = await bcrypt.compare(password, user.passwordHash || '');
-    if (!ok) return res.status(400).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ id: user._id }, JWT_SECRET);
+  res.send('Login disabled for demo'); return;
+  // try {
+  //   const { username, password } = req.body;
+  //   const user = await User.findOne({ username });
+  //   if (!user) return res.status(400).json({ error: 'Invalid credentials' });
+  //   const ok = await bcrypt.compare(password, user.passwordHash || '');
+  //   if (!ok) return res.status(400).json({ error: 'Invalid credentials' });
+  //   const token = jwt.sign({ id: user._id }, JWT_SECRET);
 
-    try { await User.findByIdAndUpdate(user._id, { status: 'online', lastSeen: new Date() }); } catch (err) { console.error('[login] failed to set user online:', err); }
+  //   try { await User.findByIdAndUpdate(user._id, { status: 'online', lastSeen: new Date() }); } catch (err) { console.error('[login] failed to set user online:', err); }
 
-    const userResponse = { id: user._id, username: user.username };
-    if (user.profilePic) {
-      if (user.profilePic.startsWith('/src/assets/Uploads/')) { userResponse.profilePic = user.profilePic.replace('/src/assets/Uploads/', '/uploads/'); }
-      else { userResponse.profilePic = user.profilePic; }
-      userResponse.p_p = user.p_p || (user.profilePic.split('/').pop());
-    }
-    return res.json({ ok: true, token, user: userResponse });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  //   const userResponse = { id: user._id, username: user.username };
+  //   if (user.profilePic) {
+  //     if (user.profilePic.startsWith('/src/assets/Uploads/')) { userResponse.profilePic = user.profilePic.replace('/src/assets/Uploads/', '/uploads/'); }
+  //     else { userResponse.profilePic = user.profilePic; }
+  //     userResponse.p_p = user.p_p || (user.profilePic.split('/').pop());
+  //   }
+  //   return res.json({ ok: true, token, user: userResponse });
+  // } catch (err) {
+  //   res.status(500).json({ error: err.message });
+  // }
 });
 
 // middleware to protect routes

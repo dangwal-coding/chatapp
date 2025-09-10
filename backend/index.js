@@ -55,7 +55,7 @@ app.get('/logout', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.json({ ok: true }));
+app.get('/', (req, res) => res.json("Hello from ChatApp backend!"));
 
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {

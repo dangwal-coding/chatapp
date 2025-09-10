@@ -96,4 +96,20 @@ router.get('/me', authMiddleware, async (req, res) => {
   res.json({ user: userObj });
 });
 
+// Get all users (no auth required for demo). Returns users without passwordHash.
+router.get('/users', async (req, res) => {
+  try {
+    const users = await User.find().select('-passwordHash');
+    const list = users.map(u => {
+      const obj = u.toObject();
+      if (obj.profilePic && obj.profilePic.startsWith('/src/assets/Uploads/')) obj.profilePic = obj.profilePic.replace('/src/assets/Uploads/', '/uploads/');
+      if (obj.profilePic && !obj.p_p) obj.p_p = obj.profilePic.split('/').pop();
+      return obj;
+    });
+    res.json({ users: list });
+  } catch (err) {
+    res.status(500).json({ error: err && err.message ? err.message : 'Server error' });
+  }
+});
+
 module.exports = router;

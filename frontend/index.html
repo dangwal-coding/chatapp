@@ -4,14 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="stylesheet" href="./src/assets/bootstrap.min.css" />
+  <!-- Use local bootstrap assets served from frontend/public/assets -->
+  <link rel="stylesheet" href="/assets/bootstrap.min.css" />
      <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css">
     <title>ChatApp</title>
   </head>
   <body>
     <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
-  <!-- Load Bootstrap JS from local offline asset -->
-  <script src="./src/assets/bootstrap.bundle.min.js"></script>
+  <!-- Load local bootstrap JS -->
+  <script src="/assets/bootstrap.bundle.min.js"></script>
   </body>
 </html>

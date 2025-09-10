@@ -24,9 +24,10 @@ function Login() {
 
     // call backend login
     setLoading(true)
-    ;(async () => {
+  ;(async () => {
       try {
-        const data = await apiFetch('http://localhost:4000/auth/login', {
+    const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
+    const data = await apiFetch(BASE + '/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })

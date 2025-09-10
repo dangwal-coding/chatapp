@@ -61,9 +61,10 @@ function Home(){
     const token = getAuthToken() || localStorage.getItem('token')
     if (!token) return navigate('/')
 
-    ;(async ()=>{
+  ;(async ()=>{
       try{
-        const me = await apiFetch('http://localhost:4000/auth/me')
+    const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
+    const me = await apiFetch(BASE + '/auth/me')
         if (!me || !me.user) return navigate('/')
         // map backend user fields to frontend shape
         setUser({ name: me.user.username, p_p: me.user.p_p || 'logo.png', id: me.user._id })
@@ -96,7 +97,8 @@ function Home(){
   async function doSearch(q){
     if (!q || !q.trim()) return
     try{
-      const usersResp = await apiFetch('http://localhost:4000/ajax/search?q=' + encodeURIComponent(q))
+  const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
+  const usersResp = await apiFetch(BASE + '/ajax/search?q=' + encodeURIComponent(q))
       const users = usersResp && usersResp.users ? usersResp.users : []
       const convs = users
         .filter(u => String(u._id) !== String(user?.id))

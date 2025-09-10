@@ -38,7 +38,8 @@ export async function apiFetch(path, opts = {}) {
 // return absolute URL to an uploaded file on the backend
 export function getUploadUrl(filename) {
   if (!filename) return '/logo.png';
-  const backendOrigin = 'http://localhost:4000';
+  // prefer an injected runtime base, then Vite env, then production fallback
+  const backendOrigin = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '');
   if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
   if (filename.startsWith('/uploads/')) return backendOrigin + filename;
   return backendOrigin + '/uploads/' + filename;

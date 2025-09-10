@@ -37,7 +37,8 @@ function Signup() {
         if (email && email.trim()) form.append('email', email.trim());
         if (_pp) form.append('profilePic', _pp);
 
-        const data = await apiFetch('http://localhost:4000/auth/signup', {
+  const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
+  const data = await apiFetch(BASE + '/auth/signup', {
           method: 'POST',
           body: form
         })

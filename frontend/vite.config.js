@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // Forward frontend requests starting with /app/ajax to the Node backend
       '/app/ajax': {
-        target: 'http://localhost:4000/ajax',
+        target: 'https://chatapp-pqft.vercel.app/ajax',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/app\/ajax/, '')

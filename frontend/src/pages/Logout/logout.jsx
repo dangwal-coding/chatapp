@@ -11,7 +11,7 @@ export async function performLogout() {
     const formBody = new URLSearchParams()
     if (uid) formBody.append('userId', uid)
 
-    const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
+    const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '');
 
     const postPresence = (path, body) => {
         const url = `${BASE}${path}`;

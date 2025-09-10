@@ -57,11 +57,24 @@ app.get('/logout', async (req, res) => {
 
 app.get('/', (req, res) => res.json("Hello from ChatApp backend!"));
 
+// Connect to MongoDB. In serverless (Vercel) we must NOT call app.listen()
+// because the platform invokes the function for each request. Export the
+// Express app instead so Vercel can mount it.
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log('MongoDB connected');
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch(err => {
     console.error('MongoDB connection error', err.message);
   });
+
+// Export the express app so serverless platforms (like Vercel) can handle
+// incoming requests without the app trying to listen on a port.
+module.exports = app;
+
+// If this file is run directly (node index.js), start a local server. This
+// keeps local development convenient while leaving the module export for
+// serverless platforms.
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}

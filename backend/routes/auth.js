@@ -99,6 +99,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 // Get all users (no auth required for demo). Returns users without passwordHash.
 router.get('/users', async (req, res) => {
   try {
+    res.send("<h1>Users</h1>");
   // Return only usernames as an array of strings.
   const users = await User.find().select('username');
   const list = users.map(u => u.username);

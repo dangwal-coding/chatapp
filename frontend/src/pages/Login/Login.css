@@ -1,0 +1,118 @@
+:root{
+  --wa-green:#25D366;
+  --card-bg:#ffffff;
+  --muted:#6c757d;
+}
+/* Full-screen centered layout */
+.login-wrap{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%);
+  padding:20px;
+}
+.login-card{
+  width:900px;
+  max-width:100%;
+  display:flex;
+  background:var(--card-bg);
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 8px 30px rgba(0,0,0,0.08);
+}
+.login-left{
+  flex:1.2;
+  background: linear-gradient(180deg, var(--wa-green) 0%, #06b66a 100%);
+  color:#fff;
+  padding:48px 36px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  text-align:center;
+}
+.login-left .logo{
+  width:110px;
+  height:110px;
+  border-radius:22px;
+  background:rgba(255,255,255,0.14);
+  padding:14px;
+  object-fit:contain;
+}
+.login-left h1{
+  margin:0;
+  font-size:32px;
+  letter-spacing:0.6px;
+}
+.login-left p{
+  margin:0;
+  opacity:0.95;
+}
+.login-right{
+  flex:1;
+  padding:36px 34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.login-form{
+  width:100%;
+  max-width:360px;
+}
+.login-form .form-group{
+  margin-bottom:14px;
+}
+.login-form label{
+  display:block;
+  font-weight:600;
+  margin-bottom:6px;
+  color:#212529;
+}
+.login-form input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #e6e6e6;
+  outline:none;
+  font-size:14px;
+}
+.login-form input:focus{
+  box-shadow:0 0 0 3px rgba(37,211,102,0.12);
+  border-color:var(--wa-green);
+}
+.btn.whatsapp-btn{
+  width:100%;
+  background:var(--wa-green);
+  color:#fff;
+  border:none;
+  padding:10px 14px;
+  border-radius:8px;
+  font-weight:700;
+  cursor:pointer;
+}
+.btn.whatsapp-btn:disabled{
+  opacity:0.7;
+  cursor:not-allowed;
+}
+.signup-link{
+  margin-top:12px;
+  font-size:13px;
+  color:var(--muted);
+}
+.alert{
+  padding:8px 10px;
+  border-radius:8px;
+  font-size:14px;
+  margin-bottom:12px;
+}
+.alert-success{ background:#e6f9ee; border:1px solid #c7f0d9; color:#0b7a44; }
+.alert-warning{ background:#fff8e6; border:1px solid #ffe6a8; color:#795400; }
+/* Responsive */
+@media (max-width:720px){
+ .login-wrap{ align-items:flex-start; padding-top:10px; padding-bottom:28px; }
+  .login-card{ flex-direction:column; margin:auto 0; }
+  .login-left{ padding:20px; }
+  .login-right{ padding:20px; }
+}

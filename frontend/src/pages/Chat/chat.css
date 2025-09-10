@@ -1,0 +1,50 @@
+/* Chat layout: header fixed, messages scroll inside panel */
+.chat-panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.chat-header { z-index: 20; background: #fff; display: flex; align-items: center; padding: 12px; box-shadow: 0 1px 0 rgba(0,0,0,0.06); }
+
+/* Back button (used in header) */
+.chat-back-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	color: #333;
+	font-size: 18px;
+	margin-right: 8px;
+}
+.chat-back-btn:hover { background: rgba(0,0,0,0.04); }
+
+.chat-scroll { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.messages { flex: 1 1 auto; padding-top: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.messages.with-input { padding-bottom: 140px; }
+
+/* Lock page scroll when chat is open on mobile */
+body.chat-lock { overflow: hidden; height: 100vh; }
+
+/* Root wrapper: occupy full viewport on mobile and prevent page scroll */
+.chat-root { display: flex; flex-direction: column; height: 100%; }
+.chat-root.mobile-full { position: fixed; inset: 0; width: 100vw; height: 100vh; background: #fff; overscroll-behavior: none; }
+
+/* Input bar base styles; fixed positioning applied only on mobile */
+.chat-input.fixed { z-index: 60; background: #fff; border-top: 1px solid rgba(0,0,0,0.08); padding-bottom: env(safe-area-inset-bottom); box-sizing: border-box; }
+
+/* Mobile-specific overrides */
+@media (max-width: 768px){
+	/* Slightly smaller avatar in header on mobile */
+	.p-3 img.rounded-circle { width: 40px !important; height: 40px !important; }
+
+	/* Fixed input should sit at bottom on mobile and have comfortable padding */
+	.chat-input.fixed { position: fixed; left: 0; right: 0; bottom: 0; z-index: 90; padding: 10px; display: flex; box-sizing: border-box; }
+
+	/* input-group layout inside fixed bar: textarea expands, button stays visible */
+	.chat-input.fixed .input-group { display: flex; gap: 8px; align-items: center; width: 100%; }
+	.chat-input.fixed .input-group .form-control { flex: 1 1 auto; margin: 0; }
+	.chat-input.fixed .input-group .btn { flex: 0 0 auto; }
+
+	/* Ensure messages reserve space for the fixed input */
+	.messages.with-input { padding-bottom: 140px !important; }
+}

@@ -1,0 +1,34 @@
+/* Ensure flex children can shrink and internal scroll works correctly */
+.app-root, .app-inner { height: 100%; }
+.app-inner { min-height: 0; }
+
+/* page basics */
+html, body, #root { height: 100%; margin: 0; }
+.app-root { height: 100vh; }
+.app-inner { overflow: hidden; }
+.left-col, .right-col { min-height: 0; display: flex; flex-direction: column; }
+
+/* make the list and chat panels scroll internally */
+.left-col .list-group, .right-col .flex-grow-1 { min-height: 0; overflow: auto; }
+
+/* cap the chat area height so it doesn't cause page scroll on small screens */
+.right-col .flex-grow-1 { max-height: calc(100vh - 120px); }
+
+/* left list max height (header + search + padding accounted) */
+.left-col .list-group { max-height: calc(100vh - 160px); }
+
+/* (Chat-related rules moved into src/pages/Chat/chat.css) */
+
+/* Hide scrollbars but keep scrolling for the main panels */
+.left-col .list-group,
+.right-col .flex-grow-1 {
+	-ms-overflow-style: none; /* IE and Edge */
+	scrollbar-width: none; /* Firefox */
+}
+.left-col .list-group::-webkit-scrollbar,
+.right-col .flex-grow-1::-webkit-scrollbar {
+	display: none; /* Chrome, Safari and Opera */
+	width: 0;
+	height: 0;
+}
+

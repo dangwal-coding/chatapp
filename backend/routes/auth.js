@@ -9,16 +9,8 @@ const fs = require('fs');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const User = require('../models/User');
 
-// configure multer to store uploads. On serverless platforms (Vercel) the
-// filesystem is ephemeral and /tmp is writable; for local dev we store in the
-// frontend assets Uploads folder so the frontend can serve them.
-const os = require('os');
-let uploadsDir;
-if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-  uploadsDir = path.join(os.tmpdir(), 'chatapp-uploads');
-} else {
-  uploadsDir = path.join(__dirname, '..', '..', 'frontend', 'src', 'assets', 'Uploads');
-}
+// configure multer to store uploads in frontend assets Uploads folder
+const uploadsDir = path.join(__dirname, '..', '..', 'frontend', 'src', 'assets', 'Uploads');
 try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) { /* ignore */ }
 const storage = multer.diskStorage({
   destination: function (req, file, cb) { cb(null, uploadsDir); },
@@ -39,11 +31,8 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
     const userDoc = { username, name, passwordHash: hash, email };
     if (req.file && req.file.filename) {
-      // Always store only the filename in the DB (p_p). The publicly
-      // accessible path can be constructed by the frontend as /uploads/<filename>.
-      userDoc.p_p = req.file.filename;
-      // keep profilePic field for backward compatibility but store a safe path
       userDoc.profilePic = '/uploads/' + req.file.filename;
+      userDoc.p_p = req.file.filename;
     }
     const user = await User.create(userDoc);
     const token = jwt.sign({ id: user._id }, JWT_SECRET);
@@ -96,7 +85,6 @@ router.get('/me', authMiddleware, async (req, res) => {
   res.json({ user: userObj });
 });
 
-// Get all users (no auth required for demo). Returns users without passwordHash.
 router.get('/users', async (req, res) => {
   try {
   // Return only usernames as an array of strings.

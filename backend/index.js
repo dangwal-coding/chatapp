@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // ensure we have a Mongo URI; prefer env but fall back to localhost for dev
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/appchat';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/chatapp';
 if (!process.env.MONGO_URI) {
   console.warn('Warning: MONGO_URI not set in environment; falling back to', MONGO_URI);
 }

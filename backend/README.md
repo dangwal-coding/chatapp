@@ -33,3 +33,5 @@ Auth
 Notes:
 - The signup endpoint accepts multipart/form-data with an optional `profilePic` file field. Uploaded images are stored in `frontend/src/assets/Uploads`.
 - After pulling changes run `npm install` in the `backend` folder to install `multer`.
+
+669orange_db_user VaFBmhKj6IpN5U19  mon 669orange@mechanicspedia.com cont )$j[Ck:RQj

@@ -95,11 +95,31 @@ router.get('/conversations', async (req, res) => {
       const other = String(m.from._id) === String(userId) ? m.to : m.from;
       const key = String(other._id);
       if (!map.has(key)) {
+        // Normalize profile picture field so frontend can build a correct URL.
+        // Stored values may be:
+        // - a filename (e.g. "1757...jpg")
+        // - "/uploads/<filename>"
+        // - "/src/assets/Uploads/<filename>"
+        // - a full URL (http(s)://...)
+        let pp = other.p_p || 'logo.png';
+        try {
+          if (typeof pp === 'string') {
+            if (pp.startsWith('/src/assets/Uploads/')) pp = pp.replace('/src/assets/Uploads/', '');
+            if (pp.startsWith('/uploads/')) pp = pp.replace('/uploads/', '');
+            // leave http(s) URLs as-is
+            if (pp.startsWith('http://') || pp.startsWith('https://')) {
+              // use full URL
+            }
+          } else {
+            pp = 'logo.png';
+          }
+        } catch (e) { pp = 'logo.png'; }
+
         map.set(key, {
           user_id: other._id,
           username: other.username,
           name: other.username,
-          p_p: other.p_p || 'logo.png',
+          p_p: pp,
           last_seen: other.lastSeen || null,
           status: other.status || 'offline',
           lastMessage: m.content,

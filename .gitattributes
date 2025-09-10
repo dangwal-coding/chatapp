@@ -1,0 +1,7 @@
+# Enforce LF for JSON and package lockfiles to avoid CRLF warnings on Windows
+*.json text eol=lf
+package-lock.json text eol=lf
+frontend/package-lock.json text eol=lf
+
+# You can add other file types that should keep LF endings here, e.g.:
+# *.sh text eol=lf

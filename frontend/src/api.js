@@ -63,6 +63,12 @@ export function getUploadUrl(filename) {
     : 'https://chatapp-pqft.vercel.app';
   const backendOrigin = ((typeof window !== 'undefined' && window.__API_BASE__) || import.meta?.env?.VITE_API_URL || devDefault).replace(/\/$/, '');
   if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
+  // if it's a path to a public asset (e.g. /logo.png), return as-is
+  if (filename.startsWith('/') && !filename.startsWith('/uploads/')) return filename;
+  // handle our server-side path directly
   if (filename.startsWith('/uploads/')) return backendOrigin + filename;
+  // common placeholder filenames should resolve from frontend public dir
+  if (filename === 'logo.png' || filename === 'default.png' || filename === 'avatar.png') return '/logo.png';
+  // otherwise treat as uploaded file name or serverless id under /uploads
   return backendOrigin + '/uploads/' + filename;
 }

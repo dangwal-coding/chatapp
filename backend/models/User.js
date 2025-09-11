@@ -6,6 +6,11 @@ const UserSchema = new mongoose.Schema({
   email: { type: String },
   passwordHash: { type: String },
   profilePic: { type: String },
+  // When running on Vercel/serverless, we can't write to disk. Store the picture in Mongo.
+  profilePicData: {
+    data: Buffer,
+    contentType: String
+  },
   p_p: { type: String },
   lastSeen: { type: Date, default: Date.now },
   status: { type: String, default: 'offline' }

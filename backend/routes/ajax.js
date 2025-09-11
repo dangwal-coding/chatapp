@@ -89,7 +89,7 @@ router.get('/conversations', async (req, res) => {
   try {
     const userId = maybeAuth(req) || req.query.userId;
     if (!userId) return res.status(400).json({ error: 'Missing user' });
-    const msgs = await Message.find({ $or: [ { from: userId }, { to: userId } ] }).sort({ createdAt: -1 }).populate('from to', 'username p_p status lastSeen');
+  const msgs = await Message.find({ $or: [ { from: userId }, { to: userId } ] }).sort({ createdAt: -1 }).populate('from to', 'username p_p status lastSeen profilePic profilePicData');
     const map = new Map();
     for (const m of msgs) {
       const other = String(m.from._id) === String(userId) ? m.to : m.from;
@@ -114,6 +114,14 @@ router.get('/conversations', async (req, res) => {
             pp = 'logo.png';
           }
         } catch (e) { pp = 'logo.png'; }
+
+        // If serverless image is stored, set p_p to the server path so frontend can use it directly
+        if (other.profilePicData && other._id) {
+          pp = `/uploads/${other._id}`;
+        } else if (other.profilePic && other.profilePic.startsWith('/uploads/')) {
+          // ensure we keep just the filename for non-serverless flow
+          pp = other.profilePic.split('/').pop();
+        }
 
         map.set(key, {
           user_id: other._id,

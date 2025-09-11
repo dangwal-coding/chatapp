@@ -38,20 +38,33 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
     if (existing) return res.status(400).json({ error: 'User exists' });
     const hash = await bcrypt.hash(password, 10);
     const userDoc = { username, name, passwordHash: hash, email };
+
     if (req.file) {
       if (isServerless) {
-        // We cannot write to disk; just set a placeholder or skip storing
-        // Client can upload later via a dedicated file storage if needed
-        userDoc.profilePic = userDoc.profilePic || '';
+        // Store in Mongo and expose a URL like /uploads/:id
+        userDoc.profilePicData = { data: req.file.buffer, contentType: req.file.mimetype || 'image/jpeg' };
+        // profilePic holds the URL path for clients
+        // p_p can store the same path or a synthetic filename for compatibility
       } else if (req.file.filename) {
         userDoc.profilePic = '/uploads/' + req.file.filename;
         userDoc.p_p = req.file.filename;
       }
     }
+
     const user = await User.create(userDoc);
+
+    if (isServerless && user.profilePicData && user._id) {
+      user.profilePic = `/uploads/${user._id}`;
+      user.p_p = user.profilePic; // frontend will treat full path as is
+      await user.save();
+    }
     const token = jwt.sign({ id: user._id }, JWT_SECRET);
     const userResp = { id: user._id, username: user.username };
-    if (user.profilePic) { userResp.profilePic = user.profilePic; userResp.p_p = user.p_p || user.profilePic.split('/').pop(); }
+    if (user.profilePic) {
+      userResp.profilePic = user.profilePic;
+      // If it's a normal filename-based path, keep a filename for p_p; otherwise keep full path
+      userResp.p_p = user.p_p || (user.profilePic.startsWith('/uploads/') ? user.profilePic.split('/').pop() : user.profilePic);
+    }
     res.json({ token, user: userResp });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -71,10 +84,17 @@ router.post('/login', async (req, res) => {
     try { await User.findByIdAndUpdate(user._id, { status: 'online', lastSeen: new Date() }); } catch (err) { console.error('[login] failed to set user online:', err); }
 
     const userResponse = { id: user._id, username: user.username };
-    if (user.profilePic) {
-      if (user.profilePic.startsWith('/src/assets/Uploads/')) { userResponse.profilePic = user.profilePic.replace('/src/assets/Uploads/', '/uploads/'); }
-      else { userResponse.profilePic = user.profilePic; }
-      userResponse.p_p = user.p_p || (user.profilePic.split('/').pop());
+    let profilePicPath = null;
+    if (isServerless && user.profilePicData) {
+      profilePicPath = `/uploads/${user._id}`;
+    } else if (user.profilePic) {
+      profilePicPath = user.profilePic.startsWith('/src/assets/Uploads/')
+        ? user.profilePic.replace('/src/assets/Uploads/', '/uploads/')
+        : user.profilePic;
+    }
+    if (profilePicPath) {
+      userResponse.profilePic = profilePicPath;
+      userResponse.p_p = user.p_p || (profilePicPath.startsWith('/uploads/') ? profilePicPath.split('/').pop() : profilePicPath);
     }
     return res.json({ ok: true, token, user: userResponse });
   } catch (err) {
@@ -95,7 +115,11 @@ router.get('/me', authMiddleware, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'Not found' });
   const userObj = user.toObject();
   if (userObj.profilePic && userObj.profilePic.startsWith('/src/assets/Uploads/')) { userObj.profilePic = userObj.profilePic.replace('/src/assets/Uploads/', '/uploads/'); }
-  if (userObj.profilePic && !userObj.p_p) { userObj.p_p = userObj.profilePic.split('/').pop(); }
+  // For serverless-stored images, ensure profilePic is an absolute path and p_p is usable by frontend
+  if (user.profilePicData && !userObj.profilePic) { userObj.profilePic = `/uploads/${user._id}`; }
+  if (userObj.profilePic && !userObj.p_p) {
+    userObj.p_p = userObj.profilePic.startsWith('/uploads/') ? userObj.profilePic.split('/').pop() : userObj.profilePic;
+  }
   res.json({ user: userObj });
 });
 

@@ -20,12 +20,31 @@ export function getUserIdFromToken() {
   }
 }
 
+function resolveApiUrl(path) {
+  // If absolute URL, return as is
+  if (/^https?:\/\//i.test(path)) return path;
+  // Determine backend origin: runtime override -> Vite env -> localhost (dev) -> prod fallback
+  const devDefault = (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost')
+    ? 'http://localhost:4000'
+    : 'https://chatapp-pqft.vercel.app';
+  const origin = (typeof window !== 'undefined' && window.__API_BASE__) || (import.meta?.env?.VITE_API_URL) || devDefault;
+  return String(origin).replace(/\/$/, '') + (path.startsWith('/') ? path : '/' + path);
+}
+
 export async function apiFetch(path, opts = {}) {
   const headers = opts.headers || {};
   const token = getAuthToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  const res = await fetch(path, { ...opts, headers });
+  const url = resolveApiUrl(path);
+  const res = await fetch(url, { ...opts, headers });
   if (!res.ok) {
+    // Try to surface server-provided JSON error messages cleanly
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const j = await res.json().catch(() => null);
+      const msg = (j && (j.error || j.message)) || res.statusText;
+      throw new Error(msg);
+    }
     const text = await res.text();
     throw new Error(text || res.statusText);
   }
@@ -38,8 +57,11 @@ export async function apiFetch(path, opts = {}) {
 // return absolute URL to an uploaded file on the backend
 export function getUploadUrl(filename) {
   if (!filename) return '/logo.png';
-  // prefer an injected runtime base, then Vite env, then production fallback
-  const backendOrigin = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '');
+  // prefer an injected runtime base, then Vite env, then localhost for dev, then production fallback
+  const devDefault = (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost')
+    ? 'http://localhost:4000'
+    : 'https://chatapp-pqft.vercel.app';
+  const backendOrigin = ((typeof window !== 'undefined' && window.__API_BASE__) || import.meta?.env?.VITE_API_URL || devDefault).replace(/\/$/, '');
   if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
   if (filename.startsWith('/uploads/')) return backendOrigin + filename;
   return backendOrigin + '/uploads/' + filename;

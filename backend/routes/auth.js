@@ -9,17 +9,25 @@ const fs = require('fs');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const User = require('../models/User');
 
-// configure multer to store uploads in frontend assets Uploads folder
+// Detect serverless environment (like Vercel)
+const isServerless = !!process.env.VERCEL;
+// configure multer storage
 const uploadsDir = path.join(__dirname, '..', '..', 'frontend', 'src', 'assets', 'Uploads');
-try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) { /* ignore */ }
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) { cb(null, uploadsDir); },
-  filename: function (req, file, cb) {
-    const name = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.\-]/g, '_');
-    cb(null, name);
-  }
-});
-const upload = multer({ storage });
+let upload;
+if (isServerless) {
+  // On serverless, avoid writing to disk; accept file in memory and skip persisting
+  upload = multer({ storage: multer.memoryStorage() });
+} else {
+  try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) { /* ignore */ }
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) { cb(null, uploadsDir); },
+    filename: function (req, file, cb) {
+      const name = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9.\-]/g, '_');
+      cb(null, name);
+    }
+  });
+  upload = multer({ storage });
+}
 
 // signup (accepts multipart/form-data with optional `profilePic` file)
 router.post('/signup', upload.single('profilePic'), async (req, res) => {
@@ -30,9 +38,15 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
     if (existing) return res.status(400).json({ error: 'User exists' });
     const hash = await bcrypt.hash(password, 10);
     const userDoc = { username, name, passwordHash: hash, email };
-    if (req.file && req.file.filename) {
-      userDoc.profilePic = '/uploads/' + req.file.filename;
-      userDoc.p_p = req.file.filename;
+    if (req.file) {
+      if (isServerless) {
+        // We cannot write to disk; just set a placeholder or skip storing
+        // Client can upload later via a dedicated file storage if needed
+        userDoc.profilePic = userDoc.profilePic || '';
+      } else if (req.file.filename) {
+        userDoc.profilePic = '/uploads/' + req.file.filename;
+        userDoc.p_p = req.file.filename;
+      }
     }
     const user = await User.create(userDoc);
     const token = jwt.sign({ id: user._id }, JWT_SECRET);

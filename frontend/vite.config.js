@@ -6,12 +6,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Forward frontend requests starting with /app/ajax to the Node backend
-      '/app/ajax': {
-        target: 'https://chatapp-pqft.vercel.app/ajax',
+      // Forward frontend requests starting with /ajax to the backend
+      '/ajax': {
+        target: 'http://localhost:4000',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/app\/ajax/, '')
+        // keep path as-is (no rewrite needed)
+        // rewrite: (path) => path
       }
     }
   }

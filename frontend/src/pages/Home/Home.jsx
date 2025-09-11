@@ -70,7 +70,7 @@ function Home(){
         setUser({ name: me.user.username, p_p: me.user.p_p || 'logo.png', id: me.user._id })
         // load persisted conversations for this user
         try {
-          const convRes = await apiFetch('/app/ajax/conversations?userId=' + encodeURIComponent(me.user._id))
+          const convRes = await apiFetch('/ajax/conversations?userId=' + encodeURIComponent(me.user._id))
           if (convRes && convRes.ok && Array.isArray(convRes.conversations)) {
             setConversations(convRes.conversations)
           } else {
@@ -138,7 +138,7 @@ function Home(){
     let mounted = true
     async function refresh() {
       try {
-        const convRes = await apiFetch('/app/ajax/conversations?userId=' + encodeURIComponent(user.id))
+  const convRes = await apiFetch('/ajax/conversations?userId=' + encodeURIComponent(user.id))
         if (!mounted) return
         if (convRes && convRes.ok && Array.isArray(convRes.conversations)) {
           setConversations(prev => {

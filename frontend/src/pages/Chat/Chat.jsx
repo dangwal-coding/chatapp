@@ -77,7 +77,7 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                     if (uid) {
                         const body = new URLSearchParams()
                         body.append('userId', uid)
-                        await apiFetch('/app/ajax/update_last_seen', { method: 'POST', body })
+                        await apiFetch('/ajax/update_last_seen', { method: 'POST', body })
                     }
                 } catch (e) { void e; /* ignore errors */ }
             })()
@@ -141,7 +141,7 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
             const body = new URLSearchParams()
             body.append('from', myId || '')
             body.append('to', active.user_id)
-            const res = await apiFetch('/app/ajax/getMessage', { method: 'POST', body })
+            const res = await apiFetch('/ajax/getMessage', { method: 'POST', body })
             // backend returns JSON: { ok: true, messages: [...] }
             if (res && res.ok && Array.isArray(res.messages)) {
                 const parsed = res.messages.map(m => ({
@@ -178,7 +178,7 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
             const form = new URLSearchParams()
             form.append('to', active.user_id)
             form.append('message', cipher)
-            const insertRes = await apiFetch('/app/ajax/insert', { method: 'POST', body: form })
+            const insertRes = await apiFetch('/ajax/insert', { method: 'POST', body: form })
             // backend returns JSON: { ok: true, message: { ... } }
             if (insertRes && insertRes.ok && insertRes.message) {
                 const m = insertRes.message

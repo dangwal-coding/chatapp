@@ -1,11 +1,10 @@
 # AppChat Backend (Node + MongoDB + JWT)
 
-This is a minimal SERN-style backend that implements the PHP ajax endpoints with Express, MongoDB (Mongoose) and JWT authentication.
+This is a minimal backend implementing chat + auth using Express, MongoDB (Mongoose) and JWT authentication. Profile images are stored on Cloudinary.
 
-Quick start
+## Quick start
 
-1. Copy `.env.example` to `.env` and set `MONGO_URI` and `JWT_SECRET`.
-
+1. Create a `.env` file (see below for required vars).
 2. Install deps and start:
 
 ```powershell
@@ -16,22 +15,47 @@ npm run dev
 
 3. Default server: `http://localhost:4000`
 
-Endpoints (mimic PHP ajax)
+## Environment Variables (.env)
 
-- `POST /ajax/insert.php` -> body: { from, to, message } or use Authorization: `Bearer <token>`
-- `GET /ajax/getMessage.php?from=<id>&to=<id>`
-- `GET /ajax/search.php?query=<q>`
-- `POST /ajax/update_last_seen.php` -> body: { userId } or Authorization
-- `GET /ajax/user_status.php?userId=<id>`
+Required:
+```
+MONGO_URI=mongodb://127.0.0.1:27017/appchat
+JWT_SECRET=change_me_secure
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+# Optional folder name (default: chatapp)
+CLOUDINARY_FOLDER=chatapp
+```
 
-Auth
+## Endpoints
 
-- `POST /auth/signup` -> body: { username, password, email }
-- `POST /auth/login` -> body: { username, password }
-- `GET /auth/me` -> requires Authorization header `Bearer <token>`
+Auth:
+- `POST /auth/signup` (multipart/form-data with optional `profilePic` file field)
+- `POST /auth/login`
+- `GET /auth/me` (Bearer token)
+- `POST /auth/logout` / `GET /logout`
 
-Notes:
-- The signup endpoint accepts multipart/form-data with an optional `profilePic` file field. Uploaded images are stored in `frontend/src/assets/Uploads`.
-- After pulling changes run `npm install` in the `backend` folder to install `multer`.
+Messages & users:
+- `POST /ajax/insert` -> body: { from, to, message } or Authorization header
+- `GET /ajax/getMessage?from=<id>&to=<id>`
+- `GET /ajax/search?query=<q>`
+- `POST /ajax/update_last_seen` -> body: { userId }
+- `POST /ajax/set_offline` (or GET) -> body/query: { userId }
+- `GET /ajax/user_status?userId=<id>`
+- `GET /ajax/conversations?userId=<id>` (Bearer token also supported)
 
-669orange_db_user VaFBmhKj6IpN5U19  mon 669orange@mechanicspedia.com cont )$j[Ck:RQj
+## Image Handling (Cloudinary)
+- Images uploaded on signup are streamed directly to Cloudinary using memory storage (no local disk writes).
+- Stored on user document as `profilePic` (secure_url) and `cloudinaryPublicId`.
+- To later replace/delete an avatar you can call Cloudinary API with `cloudinaryPublicId` (not yet implemented in routes).
+
+## Dev Notes
+- Run `npm install` after pulling changes to ensure `cloudinary` dependency is installed.
+- If Cloudinary env vars are missing, signup will still succeed but without storing an image.
+
+## Security
+- Change `JWT_SECRET` in production.
+- Do not commit your real Cloudinary credentials.
+
+---

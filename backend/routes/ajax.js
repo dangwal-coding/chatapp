@@ -89,50 +89,24 @@ router.get('/conversations', async (req, res) => {
   try {
     const userId = maybeAuth(req) || req.query.userId;
     if (!userId) return res.status(400).json({ error: 'Missing user' });
-  const msgs = await Message.find({ $or: [ { from: userId }, { to: userId } ] }).sort({ createdAt: -1 }).populate('from to', 'username p_p status lastSeen profilePic profilePicData');
+    const msgs = await Message.find({ $or: [ { from: userId }, { to: userId } ] })
+      .sort({ createdAt: -1 })
+      .populate('from to', 'username status lastSeen profilePic');
     const map = new Map();
     for (const m of msgs) {
       const other = String(m.from._id) === String(userId) ? m.to : m.from;
       const key = String(other._id);
       if (!map.has(key)) {
-        // Normalize profile picture field so frontend can build a correct URL.
-        // Stored values may be:
-        // - a filename (e.g. "1757...jpg")
-        // - "/uploads/<filename>"
-        // - "/src/assets/Uploads/<filename>"
-        // - a full URL (http(s)://...)
-        let pp = other.p_p || 'logo.png';
-        try {
-          if (typeof pp === 'string') {
-            if (pp.startsWith('/src/assets/Uploads/')) pp = pp.replace('/src/assets/Uploads/', '');
-            if (pp.startsWith('/uploads/')) pp = pp.replace('/uploads/', '');
-            // leave http(s) URLs as-is
-            if (pp.startsWith('http://') || pp.startsWith('https://')) {
-              // use full URL
-            }
-          } else {
-            pp = 'logo.png';
-          }
-        } catch (e) { pp = 'logo.png'; }
-
-        // If serverless image is stored, set p_p to the server path so frontend can use it directly
-        if (other.profilePicData && other._id) {
-          pp = `/uploads/${other._id}`;
-        } else if (other.profilePic && other.profilePic.startsWith('/uploads/')) {
-          // ensure we keep just the filename for non-serverless flow
-          pp = other.profilePic.split('/').pop();
-        }
-
         map.set(key, {
           user_id: other._id,
           username: other.username,
           name: other.username,
-          p_p: pp,
+          profilePic: other.profilePic || null,
           last_seen: other.lastSeen || null,
           status: other.status || 'offline',
           lastMessage: m.content,
           lastMessageAt: m.createdAt
-        })
+        });
       }
     }
     res.json({ ok: true, conversations: Array.from(map.values()) });

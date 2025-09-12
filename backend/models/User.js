@@ -5,13 +5,10 @@ const UserSchema = new mongoose.Schema({
   name: { type: String },
   email: { type: String },
   passwordHash: { type: String },
+  // Direct URL to the image (Cloudinary secure_url or fallback local path)
   profilePic: { type: String },
-  // When running on Vercel/serverless, we can't write to disk. Store the picture in Mongo.
-  profilePicData: {
-    data: Buffer,
-    contentType: String
-  },
-  p_p: { type: String },
+  // Cloudinary public_id for future updates/deletes
+  cloudinaryPublicId: { type: String },
   lastSeen: { type: Date, default: Date.now },
   status: { type: String, default: 'offline' }
 }, { timestamps: true });

@@ -20,6 +20,7 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     const userDoc = { username, name, passwordHash: hash, email };
+    let uploadWarning = null;
 
     if (req.file && req.file.buffer) {
       try {
@@ -27,14 +28,20 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
         userDoc.profilePic = uploadRes.secure_url;
         userDoc.cloudinaryPublicId = uploadRes.public_id;
       } catch (e) {
-        console.error('Cloudinary upload failed:', e.message);
+        uploadWarning = 'Avatar upload skipped: ' + e.message;
+        console.error('[signup] Cloudinary upload failed:', e);
       }
     }
 
     const user = await User.create(userDoc);
     const token = jwt.sign({ id: user._id }, JWT_SECRET);
-    res.json({ token, user: { id: user._id, username: user.username, profilePic: user.profilePic } });
+    res.json({
+      token,
+      user: { id: user._id, username: user.username, profilePic: user.profilePic },
+      ...(uploadWarning ? { warning: uploadWarning } : {})
+    });
   } catch (err) {
+    console.error('[signup] error', err);
     res.status(500).json({ error: err.message });
   }
 });

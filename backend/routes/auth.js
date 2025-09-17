@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const User = require('../models/User');
-const { uploadBuffer } = require('../cloudinary');
+const { uploadBuffer, isCloudinaryEnabled, cloudinaryMissing, cloudinaryResolved } = require('../cloudinary');
 
 // Always use memory storage now; image goes to Cloudinary
 const upload = multer({ storage: multer.memoryStorage() });
@@ -22,11 +22,22 @@ router.post('/signup', upload.single('profilePic'), async (req, res) => {
     const userDoc = { username, name, passwordHash: hash, email };
     let uploadWarning = null;
 
+    if (req.file) {
+      console.log('[signup] Received profilePic field name=%s size=%d mimetype=%s', req.file.originalname, req.file.size, req.file.mimetype);
+    } else {
+      console.log('[signup] No profilePic file provided');
+    }
+
     if (req.file && req.file.buffer) {
       try {
         const uploadRes = await uploadBuffer(req.file.buffer, `avatar_${Date.now()}`);
-        userDoc.profilePic = uploadRes.secure_url;
-        userDoc.cloudinaryPublicId = uploadRes.public_id;
+        if (uploadRes && uploadRes.secure_url) {
+          userDoc.profilePic = uploadRes.secure_url;
+          userDoc.cloudinaryPublicId = uploadRes.public_id;
+        } else {
+          uploadWarning = 'Cloudinary upload returned no secure_url';
+          console.warn('[signup] Unexpected Cloudinary response:', uploadRes);
+        }
       } catch (e) {
         uploadWarning = 'Avatar upload skipped: ' + e.message;
         console.error('[signup] Cloudinary upload failed:', e);
@@ -85,6 +96,19 @@ router.get('/users', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err && err.message ? err.message : 'Server error' });
   }
+});
+
+// Cloudinary diagnostic
+router.get('/cloudinary_status', (req, res) => {
+  res.json({
+    enabled: isCloudinaryEnabled(),
+    missing: cloudinaryMissing,
+    resolved: {
+      cloud_name: !!cloudinaryResolved.cloud_name,
+      api_key: !!cloudinaryResolved.api_key,
+      api_secret: !!cloudinaryResolved.api_secret
+    }
+  });
 });
 
 module.exports = router;

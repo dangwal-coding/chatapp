@@ -5,18 +5,22 @@ import '../../index.css'
 import '../Login/Login.css'
 import './Home.css'
 import Chat from '../Chat/Chat'
-import { apiFetch, getAuthToken, getUploadUrl } from '../../api'
+import { apiFetch, getAuthToken, getUploadUrl, getUserIdFromToken } from '../../api'
 import { performLogout } from '../Logout/logout' 
+import ConfirmModal from '../../Component/ConfirmModal'
+import Search from '../../Component/Search'
 
 function Home(){
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const [conversations, setConversations] = useState([])
+  const [searchResults, setSearchResults] = useState([])
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(null)
   const [messages, setMessages] = useState([])
   const messagesEndRef = useRef(null)
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false)
+  const inactivityTimerRef = useRef(null)
 
   // Decrypt helper (keep same derivation as Chat)
   const CHAT_PASSPHRASE = 'Change_This_Passphrase_To_StrongKey'
@@ -67,15 +71,31 @@ function Home(){
     const me = await apiFetch(BASE + '/auth/me')
         if (!me || !me.user) return navigate('/')
         // map backend user fields to frontend shape
-        setUser({ name: me.user.username, p_p: me.user.p_p || 'logo.png', id: me.user._id })
+        // prefer explicit full URL stored in profilePic, then legacy p_p
+        setUser({ name: me.user.username, p_p: me.user.profilePic || me.user.p_p || 'logo.png', id: me.user._id })
+        // mark user online immediately on login
+        try {
+          const uid = me.user._id
+          if (uid) {
+            const body = new URLSearchParams(); body.append('userId', uid)
+            void apiFetch('/ajax/update_last_seen', { method: 'POST', body }).catch(()=>{})
+            // reset inactivity timer on login
+            try { if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null } } catch { /* ignore cleanup errors */ };
+            inactivityTimerRef.current = setTimeout(async () => {
+              try { const b = new URLSearchParams(); b.append('userId', uid); await apiFetch('/ajax/set_offline', { method: 'POST', body: b }) } catch { /* ignore set_offline errors */ };
+            }, 3 * 60 * 1000)
+          }
+        } catch { /* ignore */ }
         // load persisted conversations for this user
         try {
           const convRes = await apiFetch('/ajax/conversations?userId=' + encodeURIComponent(me.user._id))
-          if (convRes && convRes.ok && Array.isArray(convRes.conversations)) {
-            setConversations(convRes.conversations)
-          } else {
-            setConversations([])
-          }
+              if (convRes && convRes.ok && Array.isArray(convRes.conversations)) {
+                // normalize conversation entries so each has p_p set to a usable URL if available
+                const normalized = convRes.conversations.map(c => ({ ...c, p_p: c.profilePic || c.p_p || 'logo.png' }))
+                setConversations(normalized)
+              } else {
+                setConversations([])
+              }
   } catch { setConversations([]) }
         setActive(null)
         setMessages([])
@@ -93,32 +113,63 @@ function Home(){
     })()
   }, [navigate])
 
-  // perform a search and update conversation list with results
-  async function doSearch(q){
-    if (!q || !q.trim()) return
-    try{
-  const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
-  const usersResp = await apiFetch(BASE + '/ajax/search?q=' + encodeURIComponent(q))
-      const users = usersResp && usersResp.users ? usersResp.users : []
-      const convs = users
-        .filter(u => String(u._id) !== String(user?.id))
-        .map(u=>({ user_id: u._id, username: u.username, name: u.username, p_p: u.p_p || 'logo.png', last_seen: u.lastSeen || null, status: u.status || 'offline' }))
-      setConversations(convs)
-    }catch{
-      // ignore search errors for now
+  // ensure we mark offline on page unload (tab close/refresh)
+  useEffect(() => {
+    function handleUnload() {
+      try {
+        const uid = getUserIdFromToken()
+        if (!uid) return
+        const body = new URLSearchParams(); body.append('userId', uid)
+        const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '')
+        const url = BASE + '/ajax/set_offline'
+        if (navigator.sendBeacon) {
+          try { navigator.sendBeacon(url, body); return } catch {/* ignore */}
+        }
+        // fallback: synchronous XHR is deprecated — best effort omitted
+      } catch { /* ignore */ }
     }
-  }
+    window.addEventListener('unload', handleUnload)
+    window.addEventListener('beforeunload', handleUnload)
+    return () => { window.removeEventListener('unload', handleUnload); window.removeEventListener('beforeunload', handleUnload) }
+  }, [])
+
+  // search is handled by the `Search` component (updates searchResults via onResults)
 
   // called when Chat reports that a message was sent to a user
   function handleUserSent(conv){
     if (!conv || !conv.user_id) return
-    setConversations(prev=>{
-      // if already present, move to top
-      const exists = prev.find(c=> String(c.user_id) === String(conv.user_id))
-      if (exists) {
-        return [conv, ...prev.filter(c=> String(c.user_id)!==String(conv.user_id))]
+    // mark user online and reset inactivity timer when they send a message
+    try {
+      const uid = getUserIdFromToken()
+      if (uid) {
+        const body = new URLSearchParams(); body.append('userId', uid)
+        void apiFetch('/ajax/update_last_seen', { method: 'POST', body }).catch(()=>{})
       }
-      return [conv, ...prev]
+  } catch { /* ignore */ }
+    try {
+      if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null }
+      inactivityTimerRef.current = setTimeout(async () => {
+        try { const uid = getUserIdFromToken(); if (!uid) return; const b = new URLSearchParams(); b.append('userId', uid); await apiFetch('/ajax/set_offline', { method: 'POST', body: b }) } catch { /* ignore errors */ }
+      }, 3 * 60 * 1000)
+    } catch { /* ignore */ }
+    setConversations(prev=>{
+      if (!conv || !conv.user_id) return prev
+      // merge lastMessage and lastMessageTime into the existing conversation if present
+      const idx = prev.findIndex(c=> String(c.user_id) === String(conv.user_id))
+      const updated = { ...conv }
+      // prefer explicit fields from conv (lastMessage, lastMessageTime) otherwise keep existing
+      if (idx !== -1) {
+        const existing = prev[idx]
+        updated.p_p = updated.profilePic || updated.p_p || existing.p_p || 'logo.png'
+        updated.lastMessage = conv.lastMessage || existing.lastMessage || existing.lastMessage || ''
+        updated.lastMessageTime = conv.lastMessageTime || existing.lastMessageTime || existing.lastMessageTime || Date.now()
+        // put updated entry at top when a new message was sent
+        const others = prev.filter((_, i) => i !== idx)
+        return [updated, ...others]
+      }
+      // new conversation: ensure p_p is present and add to top
+      updated.p_p = updated.profilePic || updated.p_p || 'logo.png'
+      return [updated, ...prev]
     })
   }
 
@@ -132,6 +183,13 @@ function Home(){
     return ()=> window.removeEventListener('resize', onResize)
   }, [])
 
+  // cleanup inactivity timer on unmount
+  useEffect(()=>{
+    return ()=>{
+  try { if (inactivityTimerRef.current) { clearTimeout(inactivityTimerRef.current); inactivityTimerRef.current = null } } catch { /* ignore cleanup errors */ }
+    }
+  }, [])
+
   // Poll conversations in background so incoming messages show up without manual refresh
   useEffect(() => {
     if (!user || !user.id) return undefined
@@ -142,9 +200,11 @@ function Home(){
         if (!mounted) return
         if (convRes && convRes.ok && Array.isArray(convRes.conversations)) {
           setConversations(prev => {
+            // normalize incoming conversations so p_p is a usable URL
+            const incoming = convRes.conversations.map(c => ({ ...c, p_p: c.profilePic || c.p_p || 'logo.png' }))
             // merge server order (most recent first) with existing so we keep any local ordering or additions
             const map = new Map()
-            convRes.conversations.forEach(c => map.set(String(c.user_id), c))
+            incoming.forEach(c => map.set(String(c.user_id), c))
             // keep any previous entries not present in server result
             prev.forEach(c => { if (!map.has(String(c.user_id))) map.set(String(c.user_id), c) })
             return Array.from(map.values())
@@ -169,14 +229,42 @@ function Home(){
     }
   }
 
-  const filtered = conversations.filter(c=> c.name.toLowerCase().includes(query.toLowerCase()) || c.username.toLowerCase().includes(query.toLowerCase()))
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const exitConfirmedRef = useRef(false)
+
+  useEffect(() => {
+    // Try to push a state so a back action triggers popstate while on Home
+    try { window.history.pushState({ homeGuard: true }, '') } catch (err) { console.warn('history.pushState failed', err) }
+
+    function onPopState() {
+      if (exitConfirmedRef.current) return
+      try { window.history.pushState({ homeGuard: true }, '') } catch (err) { console.warn('history.pushState failed', err) }
+      setShowLogoutModal(true)
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  const filtered = (query && query.trim())
+    ? searchResults.filter(c=> c.name.toLowerCase().includes(query.toLowerCase()) || c.username.toLowerCase().includes(query.toLowerCase()))
+    : conversations.filter(c=> c.name.toLowerCase().includes(query.toLowerCase()) || c.username.toLowerCase().includes(query.toLowerCase()))
 
   const openConversation = (conv)=>{
-    setActive(conv)
+    // ensure conversation appears in the main list
+    setConversations(prev => {
+      if (!conv || !conv.user_id) return prev
+      const exists = prev.find(c => String(c.user_id) === String(conv.user_id))
+      // If it already exists, keep existing order (don't move to top on just selecting)
+      if (exists) return prev
+      // If it's new, add to top
+      return [conv, ...prev]
+    })
     setMessages([
       { id:1, from: conv.username, text: `Hi, I'm ${conv.name}. This is a demo chat.`, ts: Date.now()-120000 },
       { id:2, from: 'me', text: 'Hello!', ts: Date.now()-60000 }
     ])
+    setActive(conv)
   }
 
   // sendMessage handled by Chat component now
@@ -184,33 +272,42 @@ function Home(){
   if (!user) return null
 
   return (
+    <>
     <div className="app-root vh-100 w-100" style={{ background: '#0b1414' }}>
       <div className="d-flex app-inner" style={{ width: '100%', height: '100%' }}>
         {/* Left column - fixed width like WhatsApp; on mobile it's full width and chat is hidden until open */}
         {(!isMobile || (isMobile && !active)) && (
           <div className="left-col" style={{ width: isMobile ? '100%' : 360, borderRight: !isMobile ? '1px solid #e6e6e6' : undefined, background: '#fff', display: 'flex', flexDirection: 'column' }}>
-          <div className="d-flex align-items-center justify-content-between p-3">
+            <div className="d-flex align-items-center justify-content-between p-3">
             <div className="d-flex align-items-center">
-              <img src={getUploadUrl(user.p_p)} className="rounded-circle" style={{ width:46, height:46 }} alt="me" />
+              <img
+                src={getUploadUrl(user.profilePic || user.p_p)}
+                className="rounded-circle"
+                style={{ width:46, height:46 }}
+                alt="me"
+                onError={(e)=>{ console.warn('avatar load failed for current user', { profilePic: user.profilePic, p_p: user.p_p, src: e.target.src }); e.target.src='/logo.png' }}
+                onLoad={()=>{ /* avatar loaded */ }}
+              />
               <div className="ms-2">
                 <div className="fw-bold">{user.name}</div>
-                <div className="text-muted" style={{ fontSize:12 }}>Online</div>
+                <div className="text-success" style={{ fontSize:12 }}>Online</div>
               </div>
             </div>
-            <button className="btn btn-sm btn-outline-dark" onClick={logout}>Logout</button>
+            <button className="btn btn-sm btn-outline-dark" onClick={()=>setShowLogoutModal(true)}>Logout</button>
           </div>
 
-          <div className="p-3">
-            <div className="input-group">
-              <input className="form-control" placeholder="Search people" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter') doSearch(query) }} />
-              <button className="btn btn-primary" onClick={()=>doSearch(query)}><i className="fa fa-search" /></button>
-            </div>
-          </div>
+          <Search query={query} setQuery={setQuery} onResults={setSearchResults} currentUserId={user?.id} />
 
           <div className="list-group list-group-flush overflow-auto" style={{ flex: 1 }}>
             {filtered.map(conv=> (
               <button key={conv.user_id} onClick={()=>openConversation(conv)} className={`list-group-item list-group-item-action d-flex align-items-center ${active?.user_id===conv.user_id ? 'active' : ''}`}>
-                <img src={getUploadUrl(conv.p_p)} className="rounded-circle" style={{ width:46, height:46 }} alt="pp" />
+                <img
+                  src={getUploadUrl(conv.profilePic || conv.p_p)}
+                  className="rounded-circle"
+                  style={{ width:46, height:46 }}
+                  alt="pp"
+                  onError={(e)=>{ console.warn('avatar load failed for conversation', { userId: conv.user_id, profilePic: conv.profilePic, p_p: conv.p_p, src: e.target.src }); e.target.src='/logo.png' }}
+                />
                 <div className="ms-2 flex-grow-1 text-start">
                   <div className="d-flex justify-content-between">
                     <strong>{conv.name}</strong>
@@ -218,7 +315,7 @@ function Home(){
                       {conv.status === 'online' ? 'Online' : (conv.last_seen ? formatLastSeen(conv.last_seen) : 'Offline')}
                     </small>
                   </div>
-                  <div className="text-truncate text-muted" style={{ fontSize:13 }}>{conv.lastMessage ? decryptMessage(conv.lastMessage) : 'No messages yet'}</div>
+                  <div className="text-truncate text-muted" style={{ fontSize:13 }}>{(conv.lastMessage ? decryptMessage(conv.lastMessage) : 'No messages yet')}</div>
                 </div>
               </button>
             ))}
@@ -235,6 +332,16 @@ function Home(){
         )}
       </div>
     </div>
+    <ConfirmModal
+      show={showLogoutModal}
+      title="Logout"
+      message="Are you sure you want to logout?"
+      confirmText="Logout"
+      cancelText="Cancel"
+      onCancel={()=>setShowLogoutModal(false)}
+      onConfirm={async ()=>{ setShowLogoutModal(false); await logout() }}
+    />
+    </>
   )
 }
 

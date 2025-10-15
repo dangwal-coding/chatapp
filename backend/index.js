@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const authRoutes = require('./routes/auth');
 const ajaxRoutes = require('./routes/ajax');
@@ -25,6 +27,22 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Create HTTP server and attach Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: true, credentials: true } });
+// make io available to routes via app.set/get
+app.set('io', io);
+
+// basic socket handling: clients join a room named `u:<userId>` to receive user-targeted events
+io.on('connection', (socket) => {
+  try {
+    socket.on('join', (userId) => {
+      if (userId) socket.join('u:' + String(userId));
+    });
+  } catch (err) { /* ignore */ }
+  socket.on('disconnect', () => {});
+});
 
 // Image hosting now handled by Cloudinary. No /uploads static route required.
 
@@ -57,7 +75,7 @@ app.get('/', (req, res) => res.json({ ok: true }));
 mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log('MongoDB connected');
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch(err => {
     console.error('MongoDB connection error', err.message);

@@ -22,6 +22,15 @@ router.post('/insert', async (req, res) => {
     const { to, message } = req.body;
     if (!fromId || !to || !message) return res.status(400).json({ error: 'Missing fields' });
     const msg = await Message.create({ from: fromId, to, content: message });
+    // emit socket event to recipient and sender (rooms: u:<userId>) if io available
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        const payload = { message: msg };
+        io.to('u:' + String(to)).emit('message:received', payload);
+        io.to('u:' + String(fromId)).emit('message:sent', payload);
+      }
+    } catch (err) { /* ignore */ }
     res.json({ ok: true, message: msg });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -57,6 +66,10 @@ router.post('/update_last_seen', async (req, res) => {
     const userId = maybeAuth(req) || req.body.userId;
     if (!userId) return res.status(400).json({ error: 'Missing user' });
     await User.findByIdAndUpdate(userId, { lastSeen: new Date(), status: 'online' });
+    try {
+      const io = req.app.get('io');
+      if (io) io.to('u:' + String(userId)).emit('user:status', { userId, status: 'online', lastSeen: new Date() });
+    } catch (err) { /* ignore */ }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -67,6 +80,10 @@ async function setOfflineHandler(req, res) {
     const userId = maybeAuth(req) || req.body.userId || req.body.user_id || req.query.userId || req.query.user_id;
     if (!userId) return res.status(400).json({ error: 'Missing user' });
     await User.findByIdAndUpdate(userId, { lastSeen: new Date(), status: 'offline' });
+    try {
+      const io = req.app.get('io');
+      if (io) io.to('u:' + String(userId)).emit('user:status', { userId, status: 'offline', lastSeen: new Date() });
+    } catch (err) { /* ignore */ }
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 }

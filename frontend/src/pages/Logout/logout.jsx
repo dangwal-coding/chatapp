@@ -7,38 +7,34 @@ export async function performLogout() {
     if (!uid && tokenLS) {
         try { uid = JSON.parse(atob(tokenLS.split('.')[1])).id } catch {/* ignore */ }
     }
-
     const formBody = new URLSearchParams()
     if (uid) formBody.append('userId', uid)
 
     const BASE = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || 'https://chatapp-pqft.vercel.app').replace(/\/$/, '');
 
-    const postPresence = (path, body) => {
-        const url = `${BASE}${path}`;
-        // Prefer Beacon (POST, no preflight, survives unload)
+    // Try to inform server the user went offline. Prefer sendBeacon (survives unload).
+    // Fallback to a keepalive fetch that includes Authorization and credentials so the backend
+    // can authenticate or read the userId from the body.
+    const sendSetOffline = async () => {
+        const url = `${BASE}/ajax/set_offline`;
+        // sendBeacon accepts URLSearchParams / FormData / Blob
         if (navigator.sendBeacon) {
             try {
-                const ok = navigator.sendBeacon(url, body);
+                const ok = navigator.sendBeacon(url, formBody);
                 if (ok) return;
             } catch {/* ignore */ }
         }
-        // Fallback: keepalive fetch without auth headers
+
+        // fallback: keepalive fetch with auth header (if present) and credentials
         try {
-            void fetch(url, {
-                method: 'POST',
-                body,
-                keepalive: true,
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-                credentials: 'omit'
-            }).catch(()=>{});
-        } catch {/* ignore*/ }
+            const headers = { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' };
+            if (tokenLS) headers['Authorization'] = 'Bearer ' + tokenLS;
+            // use keepalive so browser will try to complete the request during unload
+            await fetch(url, { method: 'POST', body: formBody, keepalive: true, headers, credentials: 'include' }).catch(()=>{});
+        } catch {/* ignore */ }
     };
 
-    try {
-        postPresence('/ajax/update_last_seen', formBody);
-        postPresence('/ajax/set_offline', formBody);
-    } catch {/* ignore*/ }
+    try { await sendSetOffline() } catch {/* ignore */ }
 
     // Server-side logout: target your backend base (adjust path to your auth route)
     try {

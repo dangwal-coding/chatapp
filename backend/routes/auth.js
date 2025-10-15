@@ -90,14 +90,13 @@ router.get('/me', authMiddleware, async (req, res) => {
 
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find().select('username');
-    const list = users.map(u => u.username);
-    res.json({ users: list });
+    // Return all users but exclude sensitive/internal fields
+    const users = await User.find().select('-passwordHash -__v');
+    res.json({ ok: true, users });
   } catch (err) {
     res.status(500).json({ error: err && err.message ? err.message : 'Server error' });
   }
 });
-
 // Cloudinary diagnostic
 router.get('/cloudinary_status', (req, res) => {
   res.json({

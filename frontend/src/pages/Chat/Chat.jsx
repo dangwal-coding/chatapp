@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { io as ioClient } from 'socket.io-client'
 import * as CryptoJS from 'crypto-js'
 import './chat.css'
 import { apiFetch, getUserIdFromToken, getUploadUrl } from '../../api'
@@ -15,6 +16,9 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
     const [vvOffset, setVvOffset] = useState(0)
     const messagesEndRef = useRef(null)
     const textareaRef = useRef(null)
+    const sendOfflineTimerRef = useRef(null)
+    const socketRef = useRef(null)
+    const shouldAutoScrollRef = useRef(false)
 
     // KEY derivation (keep same salt as original PHP conversion)
     const CHAT_PASSPHRASE = 'Change_This_Passphrase_To_StrongKey'
@@ -63,6 +67,27 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
     }
 
     useEffect(() => {
+        // ensure socket connection exists and join our user room
+        try {
+            if (!socketRef.current) {
+                    // Prefer explicit API base set by the app (window.__API_BASE__ or VITE_API_URL).
+                    // Avoid connecting to the Vite dev server origin by default (which results in ws://localhost:5173).
+                    const apiBase = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || '').replace(/\/$/, '')
+                    try {
+                        if (apiBase) {
+                            // connect to backend socket (assumes backend serves socket.io at same origin)
+                            socketRef.current = ioClient(apiBase, { transports: ['websocket'] })
+                        } else {
+                            // no explicit backend configured – don't auto-connect to current origin to avoid noisy errors
+                            socketRef.current = ioClient({ autoConnect: false })
+                        }
+                    } catch {
+                        // fallback: create a disabled socket so listeners won't throw
+                        try { socketRef.current = ioClient({ autoConnect: false }) } catch { socketRef.current = null }
+                    }
+                }
+    } catch { /* ignore */ }
+
         if (!active) return
         // load initial messages from server
         fetchMessages()
@@ -83,15 +108,81 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
             })()
         }, 10000)
 
-        return () => { clearInterval(t); clearInterval(s) }
+        return () => {
+            clearInterval(t);
+            clearInterval(s);
+            try {
+                if (sendOfflineTimerRef.current) { clearTimeout(sendOfflineTimerRef.current); sendOfflineTimerRef.current = null }
+            } catch { /* ignore */ }
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active])
 
-    // Scroll to bottom when messages change. If keyboard (vvOffset) is open, use instant scroll to avoid jumpiness.
+    // set up socket listeners once (join user room and listen for events)
+    useEffect(() => {
+        const socket = socketRef.current
+        const uid = getUserIdFromToken()
+        if (!socket || !uid) return
+
+        function onMessageReceived(payload) {
+            try {
+                if (!payload || !payload.message) return
+                const m = payload.message
+                // only handle messages that belong to current active conversation
+                const otherId = String(m.from) === String(uid) ? String(m.to) : String(m.from)
+                // if current active is otherId, append message
+                setMessages(prev => {
+                    // don't duplicate messages by id
+                    if (prev.some(x => String(x.id) === String(m._id || m.id))) return prev
+                    const parsed = {
+                        id: m._id || (m.id || Math.random().toString(36).slice(2)),
+                        cipher: m.content,
+                        time: m.createdAt ? new Date(m.createdAt).toLocaleString() : (m.created_at || new Date().toLocaleString()),
+                        fromMe: String(m.from) === String(uid)
+                    }
+                    // only add when active matches
+                    if (active && String(active.user_id) === otherId) return [...prev, parsed]
+                    return prev
+                })
+            } catch { /* ignore */ }
+        }
+
+        function onUserStatus(payload) {
+            try {
+                if (!payload || !payload.userId) return
+                if (active && String(active.user_id) === String(payload.userId)) {
+                    // update active status display
+                    active.status = payload.status
+                    active.last_seen = payload.lastSeen
+                    // force a re-render by updating state (no-op messages)
+                    setMessages(prev => [...prev])
+                }
+            } catch { /* ignore */ }
+        }
+
+        socket.on('message:received', onMessageReceived)
+        socket.on('user:status', onUserStatus)
+
+        // join our user room
+        socket.emit('join', uid)
+
+        return () => {
+            socket.off('message:received', onMessageReceived)
+            socket.off('user:status', onUserStatus)
+        }
+        
+    }, [active])
+
+    // Scroll to bottom when messages change, but only if a send just occurred.
+    // This preserves the user's manual scroll position while still jumping to bottom when they send.
     useEffect(() => {
         try {
-            const behavior = vvOffset > 0 ? 'auto' : 'smooth'
-            messagesEndRef.current?.scrollIntoView({ behavior })
+            if (shouldAutoScrollRef.current) {
+                const behavior = vvOffset > 0 ? 'auto' : 'smooth'
+                messagesEndRef.current?.scrollIntoView({ behavior })
+                // reset flag
+                shouldAutoScrollRef.current = false
+            }
         } catch { /* ignore */ }
     }, [messages, vvOffset])
 
@@ -167,15 +258,36 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
         const cipher = encryptMessage(text.trim())
     // optimistic UI with temporary id so we can replace it when server returns
         const tempId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2)
-        const msgObj = { id: tempId, cipher, time: new Date().toISOString(), fromMe: true, pending: true }
-        setMessages(prev => [...prev, msgObj])
+    const msgObj = { id: tempId, cipher, time: new Date().toISOString(), fromMe: true, pending: true }
+    // mark that we should auto-scroll when messages update
+    shouldAutoScrollRef.current = true
+    setMessages(prev => [...prev, msgObj])
+        // capture plain text for optimistic conversation update
+        const plain = text.trim()
         setText('')
+        try {
+            if (typeof onSend === 'function') {
+                // notify parent immediately with lastMessage and time so conversation list can update
+                onSend({
+                    user_id: active.user_id,
+                    username: active.username,
+                    name: active.name,
+                    p_p: active.profilePic || active.p_p,
+                    status: active.status || 'offline',
+                    last_seen: active.last_seen || null,
+                    lastMessage: plain,
+                    lastMessageTime: new Date().toISOString()
+                })
+            }
+        } catch { /* ignore */ }
     // keep input focused after sending
     setTimeout(() => { textareaRef.current?.focus() }, 50)
 
         try {
-            // backend insert expects 'to' and 'message'
+            // backend insert expects 'to' and 'message' (and accepts 'from' if no Authorization header)
             const form = new URLSearchParams()
+            const myId = getUserIdFromToken()
+            if (myId) form.append('from', myId)
             form.append('to', active.user_id)
             form.append('message', cipher)
             const insertRes = await apiFetch('/ajax/insert', { method: 'POST', body: form })
@@ -202,12 +314,49 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                     if (!out.some(x => x.id === parsed.id)) out.push(parsed)
                     return out
                 })
+                // mark user as online immediately (we just sent a message)
+                try {
+                    const uid = getUserIdFromToken()
+                    if (uid) {
+                        const body = new URLSearchParams()
+                        body.append('userId', uid)
+                        // update last seen -> sets status to 'online'
+                        void apiFetch('/ajax/update_last_seen', { method: 'POST', body }).catch(() => {})
+                    }
+                } catch { /* ignore */ }
+                // reset offline timer: if user doesn't send another message in 3 minutes, mark offline
+                try {
+                    if (sendOfflineTimerRef.current) {
+                        clearTimeout(sendOfflineTimerRef.current)
+                        sendOfflineTimerRef.current = null
+                    }
+                    sendOfflineTimerRef.current = setTimeout(async () => {
+                        try {
+                            const uid = getUserIdFromToken()
+                            if (!uid) return
+                            const body = new URLSearchParams()
+                            body.append('userId', uid)
+                            // call set_offline to mark user offline
+                            await apiFetch('/ajax/set_offline', { method: 'POST', body })
+                        } catch { /* ignore */ }
+                    }, 3 * 60 * 1000) // 3 minutes
+                } catch { /* ignore */ }
             } else {
                 // fallback: poll for fresh messages
                 setTimeout(fetchMessages, 300)
             }
             // notify parent (Home) that a message was sent to this user so they can be added to conversations
-            try { if (typeof onSend === 'function') onSend({ user_id: active.user_id, username: active.username, name: active.name, p_p: active.p_p, status: active.status || 'offline', last_seen: active.last_seen || null }) } catch { /* ignore */ }
+            try {
+                if (typeof onSend === 'function') onSend({
+                    user_id: active.user_id,
+                    username: active.username,
+                    name: active.name,
+                    // prefer explicit profilePic (full URL) if provided by backend
+                    p_p: active.profilePic || active.p_p,
+                    status: active.status || 'offline',
+                    last_seen: active.last_seen || null
+                })
+            } catch { /* ignore */ }
         } catch { /* ignore */ }
     }
 
@@ -224,7 +373,13 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                         <i className="fa-solid fa-arrow-left"></i>
                     </button>
                 )}
-                <img src={getUploadUrl(active.p_p)} className="rounded-circle" style={{ width: 46, height: 46 }} alt="sel" />
+                <img
+                    src={getUploadUrl((active || {}).profilePic || (active || {}).p_p)}
+                    className="rounded-circle"
+                    style={{ width: 46, height: 46 }}
+                    alt="sel"
+                    onError={(e)=>{ console.warn('chat avatar load failed', { profilePic: (active || {}).profilePic, p_p: (active || {}).p_p, src: e.target.src }); e.target.src='/logo.png' }}
+                />
                 <div className="ms-2">
                     <div className="fw-bold">{active.name}</div>
                     <div className={active.status === 'online' ? 'text-success' : 'text-muted'} style={{ fontSize: 12 }}>
@@ -242,7 +397,7 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                                     <div key={i} className={`d-flex ${m.fromMe ? 'justify-content-end' : 'justify-content-start'}`}>
                                         <div className={`p-2 rounded ${m.fromMe ? 'bg-success text-white' : 'bg-white text-dark'}`} style={{ maxWidth: '75%' }}>
                                             <div style={{ fontSize: 14 }}>{m.cipher ? decryptMessage(m.cipher) : '[Encrypted]'}</div>
-                                            <div className="text-muted" style={{ fontSize: 11, marginTop: 6 }}>{m.time}</div>
+                                            <div className={m.fromMe ? 'text-white' : 'text-muted'} style={{ fontSize: 11, marginTop: 6 }}>{m.time}</div>
                                         </div>
                                     </div>
                                 )

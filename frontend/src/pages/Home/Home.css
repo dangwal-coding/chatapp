@@ -32,3 +32,22 @@ html, body, #root { height: 100%; margin: 0; }
 	height: 0;
 }
 
+/* Ensure selected conversation (Bootstrap .active) uses blue background and white text */
+.left-col .list-group .list-group-item.active {
+	background-color: #0d6efd; /* Bootstrap primary blue */
+	color: #fff;
+}
+
+/* Make sure nested text elements are readable on blue background */
+.left-col .list-group .list-group-item.active .text-muted,
+.left-col .list-group .list-group-item.active small,
+.left-col .list-group .list-group-item.active .text-truncate {
+	color: rgba(255,255,255,0.9) !important;
+}
+
+/* Buttons or icons inside the active item should also invert to white when necessary */
+.left-col .list-group .list-group-item.active .btn,
+.left-col .list-group .list-group-item.active i {
+	color: #fff !important;
+}
+

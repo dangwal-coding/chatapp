@@ -12,6 +12,7 @@ export default function MobileHome({
   query,
   setQuery,
   setShowLogoutModal
+  , setSearchResults
 }) {
   const navigate = useNavigate()
   if (!user) return null
@@ -32,7 +33,7 @@ export default function MobileHome({
 
       <>
         <div style={{ padding: '12px', background: '#fff' }}>
-          <Search query={query} setQuery={setQuery} onResults={()=>{}} currentUserId={user?.id} />
+          <Search query={query} setQuery={setQuery} onResults={(r) => { if (typeof setSearchResults === 'function') setSearchResults(r) }} currentUserId={user?.id} />
         </div>
         <div className="list-group list-group-flush overflow-auto" style={{ flex: 1, background: '#f6f7f9', padding: 12 }}>
           {filtered.map(conv => (
@@ -50,7 +51,6 @@ export default function MobileHome({
                   <div className="d-flex justify-content-between align-items-start">
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <strong style={{ fontSize: 15 }}>{conv.name}</strong>
-                      <small className="text-muted" style={{ fontSize: 12, marginTop: 4 }}>{conv.username || ''}</small>
                     </div>
                     <small className={conv.status === 'online' ? 'text-success' : 'text-muted'} style={{ fontSize: 11 }}>
                       {conv.status === 'online' ? 'Online' : (conv.last_seen ? new Date(conv.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Offline')}

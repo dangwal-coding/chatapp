@@ -309,16 +309,17 @@ function Home(){
         {isMobile && (
           <div style={{ flex: 1 }}>
             <MobileHome
-              user={user}
-              filtered={filtered}
-              query={query}
-              setQuery={setQuery}
-              openConversation={openConversation}
-              active={active}
-              setActive={setActive}
-              onSend={handleUserSent}
-              setShowLogoutModal={setShowLogoutModal}
-            />
+                user={user}
+                filtered={filtered}
+                query={query}
+                setQuery={setQuery}
+                openConversation={openConversation}
+                active={active}
+                setActive={setActive}
+                onSend={handleUserSent}
+                setShowLogoutModal={setShowLogoutModal}
+                setSearchResults={setSearchResults}
+              />
           </div>
         )}
 

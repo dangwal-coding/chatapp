@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import './Login.css'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiFetch } from '../../api'
@@ -11,6 +11,40 @@ function Login() {
   const [loading, setLoading] = useState(false)
 
   const navigate = useNavigate()
+
+  // Auto-login: if there's a token+username in localStorage, try to verify it
+  // with the backend and redirect to /home. If the verify call fails due to
+  // network being offline, fall back to redirecting when token+username exist.
+  useEffect(() => {
+    let mounted = true
+    const tryAutoLogin = async () => {
+      const token = localStorage.getItem('token')
+      const uname = localStorage.getItem('username')
+      if (!token || !uname) return
+      try {
+        setLoading(true)
+        // apiFetch will include the Authorization header automatically
+        await apiFetch('/auth/me')
+        if (mounted) navigate('/home')
+      } catch (err) {
+        // If we're offline or the fetch failed due to network, still allow
+        // local auto-login as a fallback. For invalid/expired tokens the
+        // server will return 401 and we should not auto-login.
+        const msg = (err && err.message) || String(err)
+        const networkIssue = !navigator.onLine || /failed to fetch/i.test(msg) || /network/i.test(msg)
+        if (networkIssue) {
+          if (mounted) navigate('/home')
+        } else {
+          // invalid token or other server-side error; don't auto-login
+          console.warn('Auto-login token verification failed:', err)
+        }
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    tryAutoLogin()
+    return () => { mounted = false }
+  }, [navigate])
 
   const handleSubmit = (e) => {
     e.preventDefault()

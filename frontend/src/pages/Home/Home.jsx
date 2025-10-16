@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import * as CryptoJS from 'crypto-js'
+import { decryptMessage } from '../../utils/crypto'
 import { useNavigate } from 'react-router-dom'
 import '../../index.css'
 import '../Login/Login.css'
 import './Home.css'
 import Chat from '../Chat/Chat'
+import MobileHome from './MobileHome'
 import { apiFetch, getAuthToken, getUploadUrl, getUserIdFromToken } from '../../api'
 import { performLogout } from '../Logout/logout' 
 import ConfirmModal from '../../Component/ConfirmModal'
@@ -22,25 +23,6 @@ function Home(){
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 768 : false)
   const inactivityTimerRef = useRef(null)
 
-  // Decrypt helper (keep same derivation as Chat)
-  const CHAT_PASSPHRASE = 'Change_This_Passphrase_To_StrongKey'
-  const SALT_HEX = 'a1b2c3d4e5f6a7b8'
-  const KEY = CryptoJS.PBKDF2(CHAT_PASSPHRASE, CryptoJS.enc.Hex.parse(SALT_HEX), { keySize: 256 / 32, iterations: 1000 })
-
-  function decryptMessage(payload) {
-    try {
-      if (!payload || typeof payload !== 'string') return ''
-      if (!payload.includes(':')) return payload // assume plain text
-      const [ivHex, ctBase64] = payload.split(':')
-      const iv = CryptoJS.enc.Hex.parse(ivHex)
-      const cipherParams = CryptoJS.lib.CipherParams.create({ ciphertext: CryptoJS.enc.Base64.parse(ctBase64) })
-      const bytes = CryptoJS.AES.decrypt(cipherParams, KEY, { iv })
-      const txt = bytes.toString(CryptoJS.enc.Utf8)
-      return txt || '[Decrypt Fail]'
-    } catch {
-      return '[Decrypt Error]'
-    }
-  }
 
   // helper: show "Online" when status is online, otherwise show human-friendly last seen
   function formatLastSeen(value) {
@@ -275,8 +257,8 @@ function Home(){
     <>
     <div className="app-root vh-100 w-100" style={{ background: '#0b1414' }}>
       <div className="d-flex app-inner" style={{ width: '100%', height: '100%' }}>
-        {/* Left column - fixed width like WhatsApp; on mobile it's full width and chat is hidden until open */}
-        {(!isMobile || (isMobile && !active)) && (
+        {/* Left column - fixed width like WhatsApp; on mobile we render MobileHome which handles list/chat views */}
+        {(!isMobile || (isMobile && !active)) && !isMobile && (
           <div className="left-col" style={{ width: isMobile ? '100%' : 360, borderRight: !isMobile ? '1px solid #e6e6e6' : undefined, background: '#fff', display: 'flex', flexDirection: 'column' }}>
             <div className="d-flex align-items-center justify-content-between p-3">
             <div className="d-flex align-items-center">
@@ -320,6 +302,23 @@ function Home(){
               </button>
             ))}
           </div>
+          </div>
+        )}
+
+        {/* Render MobileHome when on small screens */}
+        {isMobile && (
+          <div style={{ flex: 1 }}>
+            <MobileHome
+              user={user}
+              filtered={filtered}
+              query={query}
+              setQuery={setQuery}
+              openConversation={openConversation}
+              active={active}
+              setActive={setActive}
+              onSend={handleUserSent}
+              setShowLogoutModal={setShowLogoutModal}
+            />
           </div>
         )}
 

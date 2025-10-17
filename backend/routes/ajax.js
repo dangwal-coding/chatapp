@@ -21,17 +21,30 @@ router.post('/insert', async (req, res) => {
     const fromId = maybeAuth(req) || req.body.from;
     const { to, message } = req.body;
     if (!fromId || !to || !message) return res.status(400).json({ error: 'Missing fields' });
-    const msg = await Message.create({ from: fromId, to, content: message });
+    const msg = await Message.create({ from: fromId, to, content: message, status: 'sent' });
     // emit socket event to recipient and sender (rooms: u:<userId>) if io available
     try {
       const io = req.app.get('io');
       if (io) {
-        const payload = { message: msg };
+        // sanitize message before emitting
+        const sanitize = (m) => {
+          const mm = m.toObject ? m.toObject() : m
+          const status = mm.status || (mm.isSeen ? 'seen' : 'sent')
+          return { _id: String(mm._id), from: mm.from, to: mm.to, content: mm.content, status, createdAt: mm.createdAt, updatedAt: mm.updatedAt }
+        }
+        const payload = { message: sanitize(msg) };
+        // legacy events for existing frontend
         io.to('u:' + String(to)).emit('message:received', payload);
         io.to('u:' + String(fromId)).emit('message:sent', payload);
+        // new events following spec
+        io.to('u:' + String(fromId)).emit('messageSent', payload.message);
+        io.to('u:' + String(to)).emit('messageReceived', payload.message);
       }
     } catch (err) { /* ignore */ }
-    res.json({ ok: true, message: msg });
+    // return sanitized message
+    const mm = msg.toObject ? msg.toObject() : msg
+    const status = mm.status || (mm.isSeen ? 'seen' : 'sent')
+    res.json({ ok: true, message: { _id: String(mm._id), from: mm.from, to: mm.to, content: mm.content, status, createdAt: mm.createdAt, updatedAt: mm.updatedAt } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -41,9 +54,15 @@ async function handleGetMessages(req, res) {
     const params = req.method === 'POST' ? req.body : req.query;
     const { from, to } = params;
     if (!from || !to) return res.status(400).json({ error: 'Missing params' });
-    const messages = await Message.find({
+    const msgs = await Message.find({
       $or: [ { from, to }, { from: to, to: from } ]
     }).sort('createdAt');
+    // sanitize messages
+    const messages = msgs.map(m => {
+      const mm = m.toObject ? m.toObject() : m
+      const status = mm.status || (mm.isSeen ? 'seen' : 'sent')
+      return { _id: String(mm._id), from: mm.from, to: mm.to, content: mm.content, status, createdAt: mm.createdAt, updatedAt: mm.updatedAt }
+    })
     res.json({ ok: true, messages });
   } catch (err) { res.status(500).json({ error: err.message }); }
 }

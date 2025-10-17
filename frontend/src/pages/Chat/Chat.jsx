@@ -19,6 +19,7 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
     const sendOfflineTimerRef = useRef(null)
     const socketRef = useRef(null)
     const shouldAutoScrollRef = useRef(false)
+    const seenSentRef = useRef(new Set())
 
     // KEY derivation (keep same salt as original PHP conversion)
     const CHAT_PASSPHRASE = 'Change_This_Passphrase_To_StrongKey'
@@ -70,23 +71,20 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
         // ensure socket connection exists and join our user room
         try {
             if (!socketRef.current) {
-                    // Prefer explicit API base set by the app (window.__API_BASE__ or VITE_API_URL).
-                    // Avoid connecting to the Vite dev server origin by default (which results in ws://localhost:5173).
-                    const apiBase = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || '').replace(/\/$/, '')
-                    try {
-                        if (apiBase) {
-                            // connect to backend socket (assumes backend serves socket.io at same origin)
-                            socketRef.current = ioClient(apiBase, { transports: ['websocket'] })
-                        } else {
-                            // no explicit backend configured – don't auto-connect to current origin to avoid noisy errors
-                            socketRef.current = ioClient({ autoConnect: false })
-                        }
-                    } catch {
-                        // fallback: create a disabled socket so listeners won't throw
-                        try { socketRef.current = ioClient({ autoConnect: false }) } catch { socketRef.current = null }
-                    }
+                // Prefer explicit API base set by the app (window.__API_BASE__ or VITE_API_URL).
+                // Fallback to backend dev server in development, or production URL in prod builds.
+                const devDefault = (typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost')
+                  ? 'http://localhost:4000'
+                  : 'https://chatapp-pqft.vercel.app'
+                const apiBase = (window.__API_BASE__ || import.meta?.env?.VITE_API_URL || devDefault).replace(/\/$/, '')
+                try {
+                    socketRef.current = ioClient(apiBase, { transports: ['websocket'] })
+                } catch {
+                    // fallback: create a disabled socket so listeners won't throw
+                    try { socketRef.current = ioClient({ autoConnect: false }) } catch { socketRef.current = null }
                 }
-    } catch { /* ignore */ }
+            }
+        } catch { /* ignore */ }
 
         if (!active) return
         // load initial messages from server
@@ -138,12 +136,42 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                         id: m._id || (m.id || Math.random().toString(36).slice(2)),
                         cipher: m.content,
                         time: m.createdAt ? new Date(m.createdAt).toLocaleString() : (m.created_at || new Date().toLocaleString()),
-                        fromMe: String(m.from) === String(uid)
+                        fromMe: String(m.from) === String(uid),
+                        status: m.status || 'sent'
                     }
                     // only add when active matches
                     if (active && String(active.user_id) === otherId) return [...prev, parsed]
                     return prev
                 })
+
+                // Acknowledge delivery for messages we received
+                if (String(m.to) === String(uid) && m._id) {
+                    socket.emit('messageDeliveredAck', { msgId: String(m._id) })
+                }
+            } catch { /* ignore */ }
+        }
+
+        // New event: message sent directly as payload
+        function onMessageReceivedNew(m) {
+            try {
+                if (!m) return
+                const otherId = String(m.from) === String(uid) ? String(m.to) : String(m.from)
+                setMessages(prev => {
+                    if (prev.some(x => String(x.id) === String(m._id || m.id))) return prev
+                    const parsed = {
+                        id: m._id || (m.id || Math.random().toString(36).slice(2)),
+                        cipher: m.content,
+                        time: m.createdAt ? new Date(m.createdAt).toLocaleString() : (m.created_at || new Date().toLocaleString()),
+                        fromMe: String(m.from) === String(uid),
+                        status: m.status || 'sent'
+                    }
+                    if (active && String(active.user_id) === otherId) return [...prev, parsed]
+                    return prev
+                })
+                // delivery ack if it's for me
+                if (String(m.to) === String(uid) && m._id) {
+                    socket.emit('messageDeliveredAck', { msgId: String(m._id) })
+                }
             } catch { /* ignore */ }
         }
 
@@ -161,6 +189,20 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
         }
 
         socket.on('message:received', onMessageReceived)
+        socket.on('messageReceived', onMessageReceivedNew)
+        socket.on('updateMessageStatus', ({ msgId, status, content }) => {
+            if (!status) return
+            const mapped = status === 'seen' ? 'seen' : 'sent'
+            console.debug('[socket] updateMessageStatus', { msgId, status, content })
+            setMessages(prev => prev.map(m => {
+                // match by server id first, fall back to message cipher/content for optimistic messages
+                if (msgId && String(m.id) === String(msgId)) return { ...m, status: mapped }
+                if (!msgId && content && m.cipher === content) return { ...m, status: mapped }
+                // some optimistic messages have temporary ids; match by cipher to update them
+                if (m.pending && content && m.cipher === content) return { ...m, id: msgId || m.id, status: mapped, pending: false }
+                return m
+            }))
+        })
         socket.on('user:status', onUserStatus)
 
         // join our user room
@@ -168,6 +210,8 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
 
         return () => {
             socket.off('message:received', onMessageReceived)
+            socket.off('messageReceived', onMessageReceivedNew)
+            socket.off('updateMessageStatus')
             socket.off('user:status', onUserStatus)
         }
         
@@ -239,7 +283,8 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                     id: m._id || (m.id || Math.random().toString(36).slice(2)),
                     cipher: m.content,
                     time: m.createdAt ? new Date(m.createdAt).toLocaleString() : (m.created_at || m.time || ''),
-                    fromMe: myId ? String(m.from) === String(myId) : false
+                    fromMe: myId ? String(m.from) === String(myId) : false,
+                    status: m.status || (myId && String(m.from) === String(myId) ? 'sent' : undefined)
                 }))
                 // merge server messages (authoritative) with any local pending messages
                 setMessages(prev => {
@@ -299,7 +344,8 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                     id: m._id || (m.id || Math.random().toString(36).slice(2)),
                     cipher: m.content,
                     time: m.createdAt ? new Date(m.createdAt).toLocaleString() : (m.created_at || new Date().toLocaleString()),
-                    fromMe: myId ? String(m.from) === String(myId) : true
+                    fromMe: myId ? String(m.from) === String(myId) : true,
+                    status: m.status || 'sent'
                 }
                 // replace the temporary optimistic message with the server message and dedupe
                 setMessages(prev => {
@@ -360,6 +406,24 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
         } catch { /* ignore */ }
     }
 
+    // Mark messages as seen when chat is open and messages update
+    useEffect(() => {
+        const socket = socketRef.current
+        if (!socket || !active || !messages.length) return
+        for (const m of messages) {
+            if (m && !m.fromMe && m.id && m.status !== 'seen' && !seenSentRef.current.has(String(m.id))) {
+                seenSentRef.current.add(String(m.id))
+                socket.emit('messageSeen', { msgId: String(m.id) })
+            }
+        }
+    }, [messages, active])
+
+    function renderTicks(status) {
+        // Two-state UI: single tick for sent, double tick for seen
+        if (status === 'seen') return '✔️✔️'
+        return '✅' // includes 'sent' and any other interim states
+    }
+
     // Only fix the input bar on mobile. On desktop keep it in-flow to avoid covering layout.
     const fixInput = isMobile
 
@@ -397,7 +461,12 @@ function Chat({ active, isMobile = false, onBack, onSend }) {
                                     <div key={i} className={`d-flex ${m.fromMe ? 'justify-content-end' : 'justify-content-start'}`}>
                                         <div className={`p-2 rounded ${m.fromMe ? 'bg-success text-white' : 'bg-white text-dark'}`} style={{ maxWidth: '75%' }}>
                                             <div style={{ fontSize: 14 }}>{m.cipher ? decryptMessage(m.cipher) : '[Encrypted]'}</div>
-                                            <div className={m.fromMe ? 'text-white' : 'text-muted'} style={{ fontSize: 11, marginTop: 6 }}>{m.time}</div>
+                                            <div className={m.fromMe ? 'text-white' : 'text-muted'} style={{ fontSize: 11, marginTop: 6 }}>
+                                                {m.time}
+                                                {m.fromMe && (
+                                                    <span className="ms-2">{renderTicks(m.status)}</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )
